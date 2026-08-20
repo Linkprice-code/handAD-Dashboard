@@ -2,17 +2,19 @@
 // 헤더: Authorization: Bearer <anon key>  (Supabase 게이트웨이 JWT 검증용, 필수)
 //       apikey: <anon key>
 //       X-Session-Token: <advertiser-login이 발급한 세션 토큰>  (실제 광고주 식별용)
-// body: { raw_type: "sa_powerlink_campaign" | "sa_shopping_campaign" | "sa_brand_campaign"
-//                  | "sa_powerlink_keyword" | "sa_shopping_keyword" | "sa_brand_keyword"
+// body: { raw_type: "sa_powerlink_keyword" | "sa_shopping_keyword" | "sa_brand_keyword"
 //                  | "sa_shopping_product", rows: [...] }
 //
 // 네이버 검색광고 API 자동 동기화(sa-sync) 대신, 관리시스템에서 다운로드한 리포트 CSV를
 // 수기로 업로드하는 이 사이트 전용 엔드포인트다. 파워링크/쇼핑검색/브랜드검색은 네이버에서
 // 애초에 리포트를 따로 내려주기 때문에, CSV 안에 campaign_type 컬럼을 요구하지 않고
 // raw_type(=어느 업로드 카드로 올렸는지)에 고정된 campaign_type을 서버에서 붙여서 저장한다.
-// campaign/keyword raw_type은 sa_manual_campaign_raw / sa_manual_keyword_raw 테이블에
-// campaign_type별로 같이 담기므로, 같은 날짜를 재업로드해도 다른 campaign_type 데이터를
-// 지우지 않도록 delete 조건에 campaign_type도 같이 건다.
+// 캠페인별/캠페인 유형별 성과는 별도 raw_type 없이, 키워드 raw(sa_manual_keyword_raw)를
+// campaign/campaign_type 기준으로 합산해서 만든다(sa-manual-performance 담당) - 키워드
+// 리포트가 그 캠페인의 전체 키워드를 담고 있다는 전제이며, 캠페인 단위 리포트를 따로
+// 올릴 필요가 없다. keyword raw_type은 sa_manual_keyword_raw 테이블에 campaign_type별로
+// 같이 담기므로, 같은 날짜를 재업로드해도 다른 campaign_type 데이터를 지우지 않도록
+// delete 조건에 campaign_type도 같이 건다.
 // GFA raw 업로드와 달리, 네이버 SA 리포트는 전환수/전환매출액 컬럼이 아예 없는 경우가
 // 흔해서(전환추적 미연결 등) 그 값들은 없으면 오류 대신 0으로 채운다.
 // advertiser_id는 절대 body에서 받지 않고, X-Session-Token을 서버에서 검증해서 나온 값만 쓴다.
@@ -109,9 +111,6 @@ interface RawTypeConfig {
 }
 
 const RAW_TYPE_CONFIG: Record<string, RawTypeConfig> = {
-  sa_powerlink_campaign: { table: "sa_manual_campaign_raw", campaignType: "WEB_SITE", textFields: ["campaign"] },
-  sa_shopping_campaign: { table: "sa_manual_campaign_raw", campaignType: "SHOPPING", textFields: ["campaign"] },
-  sa_brand_campaign: { table: "sa_manual_campaign_raw", campaignType: "BRAND_SEARCH", textFields: ["campaign"] },
   sa_powerlink_keyword: {
     table: "sa_manual_keyword_raw",
     campaignType: "WEB_SITE",

@@ -1620,9 +1620,9 @@ function renderUploadView() {
   } else {
     uploadViewTitle.textContent = "SA 데이터 업로드";
     uploadViewIntro.innerHTML =
-      '네이버 검색광고 관리시스템에서 다운로드한 파워링크/쇼핑검색/브랜드검색 리포트 파일을 ' +
-      '<b>수정 없이 그대로</b> 올리시면 됩니다. 캠페인별 성과, 키워드별 성과, 쇼핑검색 상품별 성과를 ' +
-      '각각 따로 업로드합니다.';
+      '네이버 검색광고 관리시스템에서 다운로드한 파워링크/쇼핑검색/브랜드검색 <b>키워드별</b> 리포트와 ' +
+      '쇼핑검색 <b>상품별</b> 리포트 파일을 <b>수정 없이 그대로</b> 올리시면 됩니다. 캠페인별/캠페인 ' +
+      '유형별 성과는 별도로 올릴 필요 없이 키워드 리포트를 합산해서 자동으로 계산됩니다.';
   }
 }
 
@@ -1701,9 +1701,8 @@ const GFA_RAW_TYPE_COLUMNS = {
   creative: ["date", "creative", "impressions", "clicks", "cost", "conversions", "revenue"],
   // SA 수기 업로드 - 파워링크/쇼핑검색/브랜드검색은 네이버에서 리포트를 애초에 따로 내려주므로
   // 캠페인 유형은 CSV 컬럼이 아니라 raw_type(=어느 카드에 올렸는지)으로 서버에서 정해진다.
-  sa_powerlink_campaign: ["date", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_shopping_campaign: ["date", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_brand_campaign: ["date", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
+  // 캠페인별/캠페인 유형별 성과 카드는 따로 없다 - 키워드 리포트가 그 캠페인의 전체 키워드를
+  // 담고 있다는 전제로, 성과 대시보드가 이 키워드 데이터를 합산해서 만든다.
   sa_powerlink_keyword: ["date", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
   sa_shopping_keyword: ["date", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
   sa_brand_keyword: ["date", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
@@ -1754,15 +1753,6 @@ const GFA_RAW_TYPE_TEMPLATE_CSV = {
   creative:
     "date,creative,impressions,clicks,cost,conversions,revenue\n" +
     "2026-08-01,여름신상_소재A,15200,320,540000,18,3200000\n",
-  sa_powerlink_campaign:
-    "date,campaign,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,여름신상_파워링크,15200,320,540000,18,3200000\n",
-  sa_shopping_campaign:
-    "date,campaign,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,여름신상_쇼핑검색,15200,320,540000,18,3200000\n",
-  sa_brand_campaign:
-    "date,campaign,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,브랜드검색_캠페인,15200,320,540000,18,3200000\n",
   sa_powerlink_keyword:
     "date,campaign,ad_group,keyword,impressions,clicks,cost,conversions,revenue\n" +
     "2026-08-01,여름신상_파워링크,그룹A,여름원피스,15200,320,540000,18,3200000\n",

@@ -12,7 +12,7 @@
 - 원본의 SA 자동 동기화 테이블(`sa_campaign_daily`, `sa_product_daily` 등)과 Edge Function
   (`sa-sync`, `sa-performance`, `sa-keyword-performance`, `sa-product-performance`,
   `sa-product-mapping-upload`)은 이 사이트에서 **전혀 쓰지 않습니다** — 이 사이트는 완전히
-  새로운 테이블(`sa_manual_campaign_raw`, `sa_manual_keyword_raw`, `sa_manual_product_raw`)과
+  새로운 테이블(`sa_manual_keyword_raw`, `sa_manual_product_raw`)과
   새 Edge Function(`sa-manual-upload`, `sa-manual-performance`)만 씁니다. 이름이 겹치지 않으므로
   원본 사이트의 Cron 자동 동기화가 이 사이트의 수기 업로드 데이터를 덮어쓰는 일은 없습니다.
 - 브랜드검색 계약비용 입력 기능(`sa_brand_search_contracts`)은 이번 버전에서는 제외했습니다.
@@ -23,9 +23,13 @@
 리포트를 카드별로 구분해서 업로드합니다 (네이버가 애초에 리포트를 유형별로 따로 내려주기 때문에
 캠페인 유형은 CSV 컬럼이 아니라 어느 업로드 카드에 올렸는지로 서버에서 정해집니다).
 
+캠페인별/캠페인 유형별 성과는 별도 업로드 카드가 없습니다 - 키워드 리포트가 그 캠페인의
+전체 키워드를 담고 있다는 전제로, `sa-manual-performance`가 키워드 Raw를 campaign /
+campaign_type 기준으로 합산해서 만듭니다 (GFA의 캠페인 Raw/그룹 Raw처럼 같은 데이터를
+두 번 올리게 하지 않기 위함).
+
 | 업로드 카드 | raw_type | 저장 테이블 |
 |---|---|---|
-| 파워링크/쇼핑검색/브랜드검색 - 캠페인별 성과 | `sa_powerlink_campaign` / `sa_shopping_campaign` / `sa_brand_campaign` | `sa_manual_campaign_raw` |
 | 파워링크/쇼핑검색/브랜드검색 - 키워드별 성과 | `sa_powerlink_keyword` / `sa_shopping_keyword` / `sa_brand_keyword` | `sa_manual_keyword_raw` |
 | 쇼핑검색 - 상품별 성과 | `sa_shopping_product` | `sa_manual_product_raw` |
 
@@ -52,7 +56,7 @@ supabase/
     gfa-upload/, gfa-performance/      # 원본과 공유 (CORS만 이 사이트 주소 추가)
     sa-manual-upload/                  # 신규 - SA CSV 업로드
     sa-manual-performance/             # 신규 - SA 집계 조회
-  create_sa_manual_raw_tables.sql      # 신규 - sa_manual_campaign_raw / keyword_raw / product_raw
+  create_sa_manual_raw_tables.sql      # 신규 - sa_manual_keyword_raw / sa_manual_product_raw
   (그 외 schema.sql 등은 원본과 공유하는 기존 테이블 정의)
 ```
 
