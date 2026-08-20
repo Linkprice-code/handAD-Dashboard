@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADS PERFORMANCE DASHBOARD</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ============ 로그인 화면 ============ -->
+<section id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg class="brand-mark brand-mark-lg" viewBox="0 0 100 90" role="img" aria-label="LinkPrice 로고">
+        <defs>
+          <radialGradient id="lpBlueLg" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#eaf1fc"/>
+            <stop offset="55%" stop-color="#5f8ad9"/>
+            <stop offset="100%" stop-color="#1f4a9b"/>
+          </radialGradient>
+          <radialGradient id="lpRedLg" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#fceceb"/>
+            <stop offset="50%" stop-color="#e2545a"/>
+            <stop offset="100%" stop-color="#b81f2d"/>
+          </radialGradient>
+          <radialGradient id="lpYellowLg" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#fffbe8"/>
+            <stop offset="55%" stop-color="#f6cf4b"/>
+            <stop offset="100%" stop-color="#e2a41a"/>
+          </radialGradient>
+        </defs>
+        <line x1="26" y1="60" x2="58" y2="24" stroke="#e08a2e" stroke-width="3"/>
+        <line x1="58" y1="24" x2="84" y2="16" stroke="#eab54a" stroke-width="3"/>
+        <circle cx="26" cy="60" r="24" fill="url(#lpBlueLg)"/>
+        <circle cx="58" cy="24" r="14" fill="url(#lpRedLg)"/>
+        <circle cx="84" cy="16" r="11" fill="url(#lpYellowLg)"/>
+      </svg>
+      <h1 class="login-title">LinkPrice</h1>
+      <p class="login-title-sub">ADS PERFORMANCE DASHBOARD</p>
+      <p class="login-subtitle">광고주 전용 성과 대시보드</p>
+    </div>
+
+    <form id="loginForm" class="login-form" autocomplete="off">
+      <label for="passwordInput" class="login-label">고객번호</label>
+      <input
+        type="password"
+        id="passwordInput"
+        class="login-input"
+        placeholder="네이버 고객번호를 입력하세요"
+        autocomplete="off"
+        required
+      >
+      <p id="loginError" class="login-error" hidden>고객번호가 올바르지 않습니다.</p>
+      <button type="submit" class="btn-primary login-btn">대시보드 접속</button>
+    </form>
+
+    <p class="login-footer">고객번호는 Supabase Edge Function에서 검증되며, 브라우저에는 저장되지 않습니다.</p>
+  </div>
+</section>
+
+<!-- ============ 대시보드 화면 ============ -->
+<section id="dashboardScreen" class="dashboard-screen" hidden>
+
+  <!-- 사이드바 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <svg class="brand-mark brand-mark-sm" viewBox="0 0 100 90" role="img" aria-label="LinkPrice 로고">
+        <defs>
+          <radialGradient id="lpBlueSm" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#eaf1fc"/>
+            <stop offset="55%" stop-color="#5f8ad9"/>
+            <stop offset="100%" stop-color="#1f4a9b"/>
+          </radialGradient>
+          <radialGradient id="lpRedSm" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#fceceb"/>
+            <stop offset="50%" stop-color="#e2545a"/>
+            <stop offset="100%" stop-color="#b81f2d"/>
+          </radialGradient>
+          <radialGradient id="lpYellowSm" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#fffbe8"/>
+            <stop offset="55%" stop-color="#f6cf4b"/>
+            <stop offset="100%" stop-color="#e2a41a"/>
+          </radialGradient>
+        </defs>
+        <line x1="26" y1="60" x2="58" y2="24" stroke="#e08a2e" stroke-width="3"/>
+        <line x1="58" y1="24" x2="84" y2="16" stroke="#eab54a" stroke-width="3"/>
+        <circle cx="26" cy="60" r="24" fill="url(#lpBlueSm)"/>
+        <circle cx="58" cy="24" r="14" fill="url(#lpRedSm)"/>
+        <circle cx="84" cy="16" r="11" fill="url(#lpYellowSm)"/>
+      </svg>
+      <div class="brand-text-group">
+        <span class="brand-name">LinkPrice</span>
+        <span class="brand-subtitle">ADS DASHBOARD</span>
+      </div>
+    </div>
+
+    <div class="channel-switch" id="channelSwitch" role="tablist">
+      <button type="button" class="channel-tab active" data-channel="SA" role="tab" aria-selected="true">SA</button>
+      <button type="button" class="channel-tab" data-channel="GFA" role="tab" aria-selected="false">GFA</button>
+    </div>
+
+    <nav class="sidebar-menu">
+      <ul id="sidebarMenuList"></ul>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span class="sidebar-footer-text">v0.1 · Prototype</span>
+    </div>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <!-- 메인 영역 -->
+  <div class="main-wrapper">
+
+    <!-- 상단 바 -->
+    <header class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="메뉴 열기">
+        <span></span><span></span><span></span>
+      </button>
+
+      <div class="topbar-info">
+        <div class="topbar-field">
+          <span class="topbar-label">광고주명</span>
+          <span id="advertiserName" class="topbar-advertiser-name"></span>
+        </div>
+        <div class="topbar-field">
+          <span class="topbar-label">분석 기간</span>
+          <span id="periodLabel" class="topbar-period"></span>
+        </div>
+      </div>
+
+      <button id="pdfExportBtn" class="btn-outline pdf-export-btn">PDF로 저장</button>
+      <button id="logoutBtn" class="btn-outline logout-btn">로그아웃</button>
+    </header>
+
+    <!-- 분석기간/비교기간 선택 - 모든 뷰에서 공통으로 보이는 영역 -->
+    <div class="period-bar" id="periodBar">
+      <div class="period-picker-row">
+        <div class="period-picker">
+          <span class="period-label">분석 기간 선택</span>
+          <select id="analysisYearSelect" class="period-select"></select>
+          <select id="analysisMonthSelect" class="period-select"></select>
+          <select id="analysisWeekSelect" class="period-select"></select>
+          <select id="analysisDaySelect" class="period-select"></select>
+          <button type="button" id="analysisConfirmBtn" class="period-confirm-btn">확인</button>
+        </div>
+        <div class="period-shortcuts">
+          <button type="button" id="analysisThisMonthBtn" class="period-shortcut-btn">이번달 보기</button>
+          <button type="button" id="analysisAllYearBtn" class="period-shortcut-btn">전체 선택</button>
+          <button type="button" id="analysisResetBtn" class="period-shortcut-btn">전체 해제</button>
+        </div>
+      </div>
+
+      <div class="period-picker-row">
+        <div class="period-picker">
+          <span class="period-label">비교 기간 선택</span>
+          <select id="compareYearSelect" class="period-select"></select>
+          <select id="compareMonthSelect" class="period-select"></select>
+          <select id="compareWeekSelect" class="period-select"></select>
+          <select id="compareDaySelect" class="period-select"></select>
+          <button type="button" id="compareConfirmBtn" class="period-confirm-btn">확인</button>
+        </div>
+        <div class="period-shortcuts">
+          <button type="button" id="compareResetBtn" class="period-shortcut-btn">비교 초기화</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 컨텐츠 영역 -->
+    <main class="content" id="content">
+
+      <!-- 성과 대시보드 뷰 -->
+      <div class="view" id="view-overview">
+        <h2 class="view-title" id="overviewTitle">SA 성과 대시보드</h2>
+
+        <p class="empty-notice" id="overviewEmptyNotice" hidden></p>
+
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <!-- SA 전용: 캠페인 유형별 성과 (파워링크 / 쇼핑검색 / 브랜드검색) -->
+        <div class="breakdown-section" id="campaignTypeSection" hidden>
+          <div class="breakdown-card">
+            <div class="breakdown-header">
+              <h3 class="breakdown-title">캠페인 유형별 성과</h3>
+              <div class="breakdown-filter" id="campaignTypeFilter" role="tablist">
+                <button type="button" class="breakdown-filter-btn active" data-campaign-type="powerlink">파워링크</button>
+                <button type="button" class="breakdown-filter-btn" data-campaign-type="shopping">쇼핑검색</button>
+                <button type="button" class="breakdown-filter-btn" data-campaign-type="brand">브랜드검색</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>캠페인 유형</th>
+                    <th>광고비</th>
+                    <th>광고매출</th>
+                    <th>ROAS</th>
+                    <th>클릭수</th>
+                    <th>CTR</th>
+                    <th>전환수</th>
+                    <th>CVR</th>
+                    <th>CPA</th>
+                  </tr>
+                </thead>
+                <tbody id="campaignTypeTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- GFA 전용: 캠페인 유형별 성과 (웹사이트 전환 / 인지도 및 트래픽 / 쇼핑 프로모션 / 카탈로그 판매 / 동영상 조회) -->
+        <div class="breakdown-section" id="gfaCampaignTypeSection" hidden>
+          <div class="breakdown-card">
+            <div class="breakdown-header">
+              <h3 class="breakdown-title">캠페인 유형별 성과</h3>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>캠페인 유형</th>
+                    <th>광고비</th>
+                    <th>광고매출</th>
+                    <th>ROAS</th>
+                    <th>클릭수</th>
+                    <th>CTR</th>
+                    <th>전환수</th>
+                    <th>CVR</th>
+                    <th>CPA</th>
+                  </tr>
+                </thead>
+                <tbody id="gfaCampaignTypeTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 캠페인별 / 그룹별(/ GFA만 ADVoost 쇼핑) 성과 -->
+        <div class="breakdown-section">
+          <div class="breakdown-card">
+            <div class="breakdown-header">
+              <h3 class="breakdown-title" id="breakdownTitle">캠페인별 성과</h3>
+              <div class="breakdown-filter" id="breakdownFilter" role="tablist">
+                <button type="button" class="breakdown-filter-btn active" data-raw-type="campaign">캠페인별</button>
+                <button type="button" class="breakdown-filter-btn" data-raw-type="adgroup">그룹별</button>
+                <button type="button" class="breakdown-filter-btn gfa-only-tab" data-raw-type="adv">ADVoost 쇼핑</button>
+              </div>
+            </div>
+            <span class="breakdown-hint">컬럼 이름을 클릭하면 그 지표로 오름차순/내림차순 정렬됩니다</span>
+            <div class="table-wrap">
+              <table class="data-table" id="breakdownTable">
+                <thead>
+                  <tr>
+                    <th class="sortable" data-sort-key="name" id="breakdownNameHeader">이름</th>
+                    <th class="sortable" data-sort-key="cost">광고비</th>
+                    <th class="sortable" data-sort-key="revenue">광고매출</th>
+                    <th class="sortable" data-sort-key="roas">ROAS</th>
+                    <th class="sortable" data-sort-key="clicks">클릭수</th>
+                    <th class="sortable" data-sort-key="ctr">CTR</th>
+                    <th class="sortable" data-sort-key="conversions">전환수</th>
+                    <th class="sortable" data-sort-key="cvr">CVR</th>
+                    <th class="sortable" data-sort-key="cpa">CPA</th>
+                  </tr>
+                </thead>
+                <tbody id="breakdownTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SA 전용: 파워링크/쇼핑검색/브랜드검색 키워드별 성과 뷰 (공용 템플릿) -->
+      <div class="view" id="view-keyword" hidden>
+        <h2 class="view-title" id="keywordViewTitle">파워링크 키워드별 성과</h2>
+        <p class="empty-notice" id="keywordViewNotice" hidden></p>
+
+        <div class="model-list-card">
+          <div class="model-list-header">
+            <h3 class="model-list-title" id="keywordViewSubtitle">키워드별 성과 상세</h3>
+            <input type="text" id="keywordSearchInput" class="model-search-input" placeholder="키워드명 검색">
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>키워드</th>
+                  <th>캠페인</th>
+                  <th>광고그룹</th>
+                  <th>노출수</th>
+                  <th>클릭수</th>
+                  <th>CTR</th>
+                  <th>비용</th>
+                  <th>CPC</th>
+                </tr>
+              </thead>
+              <tbody id="keywordTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 그래프 추이 뷰 -->
+      <div class="view" id="view-trend" hidden>
+        <h2 class="view-title" id="trendTitle">SA 그래프 추이</h2>
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3 class="chart-card-title">일별 광고비 추이</h3>
+            <div class="chart-canvas-wrap"><canvas id="spendChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3 class="chart-card-title">일별 광고매출 추이</h3>
+            <div class="chart-canvas-wrap"><canvas id="revenueChart"></canvas></div>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <h3 class="chart-card-title">ROAS 추이</h3>
+            <div class="chart-canvas-wrap"><canvas id="roasChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SA/GFA 공용: 상품별(모델별) 성과 뷰 -->
+      <div class="view" id="view-model" hidden>
+        <h2 class="view-title" id="modelViewTitle">상품별(모델별) 성과</h2>
+        <p class="empty-notice" id="modelViewNotice" hidden></p>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3 class="chart-card-title">Top 5 모델 매출 비중</h3>
+            <div class="chart-canvas-wrap"><canvas id="modelRevenueDonutChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3 class="chart-card-title">주요 5대 모델 전환율(CVR) &amp; ROAS</h3>
+            <div class="chart-canvas-wrap"><canvas id="modelCvrRoasChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="model-list-card" id="modelListCard">
+          <div class="model-list-header">
+            <h3 class="model-list-title">전 품목 모델별 성과 상세</h3>
+            <input type="text" id="modelSearchInput" class="model-search-input" placeholder="모델명 검색">
+          </div>
+          <span class="breakdown-hint">카드를 클릭하면 상세 데이터가 열립니다.</span>
+          <div class="model-card-grid" id="modelCardGrid"></div>
+        </div>
+      </div>
+
+      <!-- GFA 그룹별 성과 뷰 (캠페인별 / 광고그룹별 / 상품별 공용) -->
+      <div class="view" id="view-grouped" hidden>
+        <h2 class="view-title" id="groupedTitle">GFA 성과</h2>
+        <div class="table-card">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th id="groupedNameHeader">이름</th>
+                  <th>광고비</th>
+                  <th>광고매출</th>
+                  <th>ROAS</th>
+                  <th>클릭수</th>
+                  <th>CTR</th>
+                  <th>전환수</th>
+                  <th>CVR</th>
+                  <th>CPA</th>
+                </tr>
+              </thead>
+              <tbody id="groupedTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- GFA 데이터 업로드 뷰 -->
+      <div class="view" id="view-upload" hidden>
+        <h2 class="view-title" id="uploadViewTitle">GFA 데이터 업로드</h2>
+        <p class="upload-intro" id="uploadViewIntro">
+          네이버 GFA에서 다운로드한 캠페인/그룹/ADV/소재 리포트 파일을 <b>수정 없이 그대로</b> 올리시면 됩니다.
+          "기간", "캠페인 이름", "노출수", "총비용", "구매완료 수", "구매완료 전환매출액" 같은 원본 헤더를
+          자동으로 인식합니다 (전환수/전환매출액은 여러 종류 중 <b>구매완료 기준</b>만 사용합니다).
+        </p>
+
+        <div class="upload-grid channel-upload-grid" data-channel="GFA">
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">캠페인 Raw</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
+            <a class="upload-template-link" data-template="campaign" download="gfa_campaign_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="campaign">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">그룹 Raw</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 광고 그룹 이름, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
+            <a class="upload-template-link" data-template="adgroup" download="gfa_adgroup_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="adgroup">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">ADV Raw</h3>
+            <code class="upload-columns">기간, 상품명, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
+            <a class="upload-template-link" data-template="adv" download="gfa_adv_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="adv">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">소재 Raw</h3>
+            <code class="upload-columns">기간, 소재 이름, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
+            <a class="upload-template-link" data-template="creative" download="gfa_creative_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="creative">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+        </div>
+
+        <div class="upload-grid channel-upload-grid" data-channel="SA" hidden>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">파워링크 - 캠페인별 성과</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_powerlink_campaign" download="sa_powerlink_campaign_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_powerlink_campaign">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">쇼핑검색 - 캠페인별 성과</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_shopping_campaign" download="sa_shopping_campaign_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_shopping_campaign">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">브랜드검색 - 캠페인별 성과</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_brand_campaign" download="sa_brand_campaign_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_brand_campaign">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">파워링크 - 키워드별 성과</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_powerlink_keyword" download="sa_powerlink_keyword_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_powerlink_keyword">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">쇼핑검색 - 키워드별 성과</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_shopping_keyword" download="sa_shopping_keyword_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_shopping_keyword">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">브랜드검색 - 키워드별 성과</h3>
+            <code class="upload-columns">기간, 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_brand_keyword" download="sa_brand_keyword_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_brand_keyword">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card">
+            <h3 class="upload-card-title">쇼핑검색 - 상품별 성과</h3>
+            <code class="upload-columns">기간, 상품명, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_shopping_product" download="sa_shopping_product_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_shopping_product">
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+        </div>
+
+        <p class="upload-note">
+          같은 종류(캠페인/그룹/ADV/키워드/상품)에서 같은 날짜(기간)로 다시 업로드하면, 그 날짜의 기존 데이터는
+          새 데이터로 교체됩니다 (중복 누적 방지).
+        </p>
+      </div>
+
+      <!-- 준비 중 플레이스홀더 뷰 (그래프 추이, 일별/월별/카테고리별 데이터, 소재별 성과 등) -->
+      <div class="view" id="view-placeholder" hidden>
+        <h2 class="view-title" id="placeholderTitle">준비 중</h2>
+        <div class="placeholder-card">
+          <p class="placeholder-text">해당 메뉴는 다음 단계에서 Supabase 연동과 함께 구현될 예정입니다.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+<!-- 모델 상세 모달 (SA 상품별 데이터 카드 클릭 시) -->
+<div class="modal-overlay" id="modelDetailModal" hidden>
+  <div class="modal-box">
+    <button type="button" class="modal-close-btn" id="modelDetailCloseBtn" aria-label="닫기">&times;</button>
+    <span class="model-badge" id="modelDetailBadge"></span>
+    <h3 class="modal-title" id="modelDetailTitle"></h3>
+
+    <h4 class="modal-section-title"><span id="modelDetailPeriodLabel"></span> 모델 총합 데이터</h4>
+    <div class="modal-stat-grid">
+      <div class="modal-stat-box"><span class="modal-stat-label">노출수</span><span class="modal-stat-value" id="modelDetailImpressions"></span></div>
+      <div class="modal-stat-box"><span class="modal-stat-label">클릭수</span><span class="modal-stat-value" id="modelDetailClicks"></span></div>
+      <div class="modal-stat-box"><span class="modal-stat-label">평균 CPC</span><span class="modal-stat-value" id="modelDetailCpc"></span></div>
+      <div class="modal-stat-box"><span class="modal-stat-label">클릭률(CTR)</span><span class="modal-stat-value accent" id="modelDetailCtr"></span></div>
+      <div class="modal-stat-box"><span class="modal-stat-label">전환율(CVR)</span><span class="modal-stat-value accent" id="modelDetailCvr"></span></div>
+    </div>
+
+    <div class="modal-summary-bar">
+      <div class="modal-summary-item"><span class="modal-summary-label">총 비용</span><span class="modal-summary-value" id="modelDetailCost"></span></div>
+      <div class="modal-summary-item"><span class="modal-summary-label">총 전환수</span><span class="modal-summary-value good" id="modelDetailConversions"></span></div>
+      <div class="modal-summary-item"><span class="modal-summary-label">총 전환금액</span><span class="modal-summary-value warn" id="modelDetailRevenue"></span></div>
+      <div class="modal-summary-item"><span class="modal-summary-label">광고수익률(ROAS)</span><span class="modal-summary-value accent" id="modelDetailRoas"></span></div>
+    </div>
+
+    <h4 class="modal-section-title">상세 키워드 성과 리스트</h4>
+    <div class="table-wrap modal-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>키워드명</th>
+            <th>노출수</th>
+            <th>클릭수</th>
+            <th>총비용</th>
+            <th>총전환수</th>
+            <th>총전환금액</th>
+          </tr>
+        </thead>
+        <tbody id="modelDetailKeywordBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
