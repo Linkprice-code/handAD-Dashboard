@@ -20,7 +20,7 @@ const ALLOWED_ORIGINS = [
   "https://wjdauddba998-code.github.io",
   "https://linkprice-dashboard.netlify.app",
   // handAD-Dashboard(SA 수기 업로드 사이트) - advertisers 테이블/이 함수를 그대로 재사용한다.
-  "https://handad-dashboard.netlify.app",
+  "https://ad-dashboard-hand.netlify.app",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
 ];

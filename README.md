@@ -58,9 +58,9 @@ supabase/
 
 ## 배포 상태
 
-- [ ] `create_sa_manual_raw_tables.sql`을 Supabase SQL Editor에서 실행
-- [ ] `sa-manual-upload`, `sa-manual-performance` Edge Function 배포
-- [ ] 원본의 `advertiser-login` / `gfa-upload` / `gfa-performance`의 `ALLOWED_ORIGINS`에
+- [x] `create_sa_manual_raw_tables.sql`을 Supabase SQL Editor에서 실행
+- [x] `sa-manual-upload`, `sa-manual-performance` Edge Function 배포
+- [x] 원본의 `advertiser-login` / `gfa-upload` / `gfa-performance`의 `ALLOWED_ORIGINS`에
       이 사이트의 Netlify 주소 추가 후 재배포
-- [ ] GitHub 저장소 생성 & push
-- [ ] Netlify 새 사이트 연결 & Public 설정
+- [x] GitHub 저장소 생성 & push (https://github.com/wjdauddba998-code/handAD-Dashboard)
+- [x] Netlify 새 사이트 연결 & Public 설정 (https://ad-dashboard-hand.netlify.app)

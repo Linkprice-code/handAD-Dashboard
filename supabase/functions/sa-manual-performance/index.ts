@@ -19,7 +19,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
-  "https://handad-dashboard.netlify.app",
+  "https://ad-dashboard-hand.netlify.app",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
 ];
