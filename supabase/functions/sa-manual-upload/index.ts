@@ -2,19 +2,17 @@
 // 헤더: Authorization: Bearer <anon key>  (Supabase 게이트웨이 JWT 검증용, 필수)
 //       apikey: <anon key>
 //       X-Session-Token: <advertiser-login이 발급한 세션 토큰>  (실제 광고주 식별용)
-// body: { raw_type: "sa_powerlink_keyword" | "sa_shopping_keyword" | "sa_brand_keyword"
-//                  | "sa_shopping_product", rows: [...] }
+// body: { raw_type: "sa_campaign" | "sa_adgroup" | "sa_keyword" | "sa_product", rows: [...] }
 //
 // 네이버 검색광고 API 자동 동기화(sa-sync) 대신, 관리시스템에서 다운로드한 리포트 CSV를
-// 수기로 업로드하는 이 사이트 전용 엔드포인트다. 파워링크/쇼핑검색/브랜드검색은 네이버에서
-// 애초에 리포트를 따로 내려주기 때문에, CSV 안에 campaign_type 컬럼을 요구하지 않고
-// raw_type(=어느 업로드 카드로 올렸는지)에 고정된 campaign_type을 서버에서 붙여서 저장한다.
-// 캠페인별/캠페인 유형별 성과는 별도 raw_type 없이, 키워드 raw(sa_manual_keyword_raw)를
-// campaign/campaign_type 기준으로 합산해서 만든다(sa-manual-performance 담당) - 키워드
-// 리포트가 그 캠페인의 전체 키워드를 담고 있다는 전제이며, 캠페인 단위 리포트를 따로
-// 올릴 필요가 없다. keyword raw_type은 sa_manual_keyword_raw 테이블에 campaign_type별로
-// 같이 담기므로, 같은 날짜를 재업로드해도 다른 campaign_type 데이터를 지우지 않도록
-// delete 조건에 campaign_type도 같이 건다.
+// 수기로 업로드하는 이 사이트 전용 엔드포인트다. GFA(캠페인/그룹/ADV/소재 Raw)와 동일한
+// 구조로 캠페인/그룹/키워드/상품 Raw 4종을 둔다. GFA와 다른 점은, 파워링크/쇼핑검색/
+// 브랜드검색을 raw_type이 아니라 CSV 안의 campaign_type(캠페인 유형) 컬럼으로 구분한다는
+// 것이다 - 한 캠페인/그룹/키워드 Raw 파일에 여러 유형이 섞여 있어도 된다. 사용자가 입력한
+// 캠페인 유형 값(파워링크/쇼핑검색/브랜드검색 등)은 normalizeCampaignType으로 WEB_SITE/
+// SHOPPING/BRAND_SEARCH 코드로 정규화한 뒤에만 저장한다.
+// campaign_type이 행마다 다를 수 있으므로, 재업로드 시 delete-then-insert는 (date,
+// campaign_type) 조합 단위로 수행한다(다른 유형/날짜 데이터를 지우지 않기 위해).
 // GFA raw 업로드와 달리, 네이버 SA 리포트는 전환수/전환매출액 컬럼이 아예 없는 경우가
 // 흔해서(전환추적 미연결 등) 그 값들은 없으면 오류 대신 0으로 채운다.
 // advertiser_id는 절대 body에서 받지 않고, X-Session-Token을 서버에서 검증해서 나온 값만 쓴다.
@@ -100,42 +98,56 @@ async function verifySessionToken(token: string): Promise<SessionPayload> {
 }
 
 /* ---------------------------------------------------------
-   raw_type별 설정 - 테이블명/캠페인유형/텍스트 컬럼은 여기 허용 목록에서만 고른다
+   raw_type별 설정 - 테이블명/텍스트 컬럼은 여기 허용 목록에서만 고른다
    (사용자 입력을 테이블명 등 식별자로 직접 쓰지 않는다)
 --------------------------------------------------------- */
 interface RawTypeConfig {
   table: string;
-  campaignType: "WEB_SITE" | "SHOPPING" | "BRAND_SEARCH" | null;
+  campaignTypeRequired: boolean;
   textFields: string[];
   optionalTextFields?: string[];
 }
 
 const RAW_TYPE_CONFIG: Record<string, RawTypeConfig> = {
-  sa_powerlink_keyword: {
+  sa_campaign: { table: "sa_manual_campaign_raw", campaignTypeRequired: true, textFields: ["campaign"] },
+  sa_adgroup: {
+    table: "sa_manual_adgroup_raw",
+    campaignTypeRequired: true,
+    textFields: ["campaign", "ad_group"],
+  },
+  sa_keyword: {
     table: "sa_manual_keyword_raw",
-    campaignType: "WEB_SITE",
+    campaignTypeRequired: true,
     textFields: ["campaign", "keyword"],
     optionalTextFields: ["ad_group"],
   },
-  sa_shopping_keyword: {
-    table: "sa_manual_keyword_raw",
-    campaignType: "SHOPPING",
-    textFields: ["campaign", "keyword"],
-    optionalTextFields: ["ad_group"],
-  },
-  sa_brand_keyword: {
-    table: "sa_manual_keyword_raw",
-    campaignType: "BRAND_SEARCH",
-    textFields: ["campaign", "keyword"],
-    optionalTextFields: ["ad_group"],
-  },
-  sa_shopping_product: { table: "sa_manual_product_raw", campaignType: null, textFields: ["product"] },
+  sa_product: { table: "sa_manual_product_raw", campaignTypeRequired: false, textFields: ["product"] },
 };
 
 const MAX_ROWS = 20000;
 const MAX_TEXT_LENGTH = 200;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const NUMERIC_FIELDS = ["impressions", "clicks", "cost", "conversions", "revenue"];
+
+// 파워링크/쇼핑검색/브랜드검색을 가리킬 수 있는 표현들을 코드로 정규화한다.
+// 프론트엔드(app.js normalizeSaCampaignType)에서 이미 정규화해서 보내지만,
+// 이 엔드포인트를 직접 호출하는 경우도 있을 수 있어 서버에서도 다시 검증한다.
+const CAMPAIGN_TYPE_ALIASES: Record<string, string> = {
+  web_site: "WEB_SITE",
+  파워링크: "WEB_SITE",
+  웹사이트: "WEB_SITE",
+  shopping: "SHOPPING",
+  쇼핑검색: "SHOPPING",
+  쇼핑: "SHOPPING",
+  brand_search: "BRAND_SEARCH",
+  브랜드검색: "BRAND_SEARCH",
+  브랜드: "BRAND_SEARCH",
+};
+
+function normalizeCampaignType(raw: unknown): string | null {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return CAMPAIGN_TYPE_ALIASES[value] ?? null;
+}
 
 // GFA와 달리, 값이 아예 없으면(컬럼 자체가 CSV에 없었으면) 오류 대신 0으로 채운다.
 // 값이 있는데 숫자로 못 읽거나 음수면 오류로 처리한다.
@@ -150,7 +162,8 @@ function validateRow(
   raw: Record<string, unknown>,
   index: number,
   textFields: string[],
-  optionalTextFields: string[] = [],
+  optionalTextFields: string[],
+  campaignTypeRequired: boolean,
 ): Record<string, unknown> {
   const rowNo = index + 1;
 
@@ -159,6 +172,17 @@ function validateRow(
   }
 
   const clean: Record<string, unknown> = { date: raw.date };
+
+  if (campaignTypeRequired) {
+    const normalized = normalizeCampaignType(raw.campaign_type);
+    if (!normalized) {
+      throw new Error(
+        `${rowNo}번째 행: 캠페인 유형 값("${String(raw.campaign_type ?? "")}")을 인식하지 못했습니다. ` +
+          `파워링크/쇼핑검색/브랜드검색 중 하나로 입력해주세요.`,
+      );
+    }
+    clean.campaign_type = normalized;
+  }
 
   for (const field of textFields) {
     const value = String(raw[field] ?? "").trim();
@@ -248,7 +272,13 @@ Deno.serve(async (req: Request) => {
   let cleanRows: Record<string, unknown>[];
   try {
     cleanRows = body.rows.map((row, i) =>
-      validateRow(row as Record<string, unknown>, i, config.textFields, config.optionalTextFields ?? [])
+      validateRow(
+        row as Record<string, unknown>,
+        i,
+        config.textFields,
+        config.optionalTextFields ?? [],
+        config.campaignTypeRequired,
+      )
     );
   } catch (err) {
     return jsonResponse({ success: false, message: (err as Error).message }, 400, headers);
@@ -265,29 +295,40 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
+  // 같은 (advertiser, date[, campaign_type]) 조합을 다시 업로드해도 중복 누적되지 않도록,
+  // 기존 데이터를 먼저 지우고 새로 넣는다. campaign_type이 행마다 다를 수 있으므로(한 파일에
+  // 파워링크/쇼핑검색/브랜드검색이 섞여 있을 수 있음), (date, campaign_type) 조합 단위로 지운다.
   const uniqueDates = [...new Set(cleanRows.map((r) => r.date as string))];
 
-  // 같은 raw_type(=같은 campaign_type) + 날짜를 다시 업로드해도 중복 누적되지 않도록,
-  // 그 날짜의 기존 데이터를 먼저 지우고 새로 넣는다. campaign/keyword 테이블은 여러
-  // campaign_type이 같이 담기므로, 다른 유형 데이터를 지우지 않게 campaign_type도 건다.
-  let deleteQuery = supabase
-    .from(config.table)
-    .delete()
-    .eq("advertiser_id", session.advertiser_id)
-    .in("date", uniqueDates);
-  if (config.campaignType) {
-    deleteQuery = deleteQuery.eq("campaign_type", config.campaignType);
-  }
-  const { error: deleteError } = await deleteQuery;
-
-  if (deleteError) {
-    console.error("sa-manual-upload delete error:", deleteError.message);
-    return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+  if (config.campaignTypeRequired) {
+    const uniqueKeys = new Set(cleanRows.map((r) => `${r.date}|${r.campaign_type}`));
+    for (const key of uniqueKeys) {
+      const [date, campaignType] = key.split("|");
+      const { error: deleteError } = await supabase
+        .from(config.table)
+        .delete()
+        .eq("advertiser_id", session.advertiser_id)
+        .eq("date", date)
+        .eq("campaign_type", campaignType);
+      if (deleteError) {
+        console.error("sa-manual-upload delete error:", deleteError.message);
+        return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+      }
+    }
+  } else {
+    const { error: deleteError } = await supabase
+      .from(config.table)
+      .delete()
+      .eq("advertiser_id", session.advertiser_id)
+      .in("date", uniqueDates);
+    if (deleteError) {
+      console.error("sa-manual-upload delete error:", deleteError.message);
+      return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+    }
   }
 
   const insertRows = cleanRows.map((r) => ({
     advertiser_id: session.advertiser_id,
-    ...(config.campaignType ? { campaign_type: config.campaignType } : {}),
     ...r,
   }));
 

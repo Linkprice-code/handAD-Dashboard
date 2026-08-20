@@ -435,10 +435,10 @@
         <div class="upload-grid channel-upload-grid" data-channel="SA" hidden>
 
           <div class="upload-card">
-            <h3 class="upload-card-title">파워링크 - 키워드별 성과</h3>
-            <code class="upload-columns">기간, 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
-            <a class="upload-template-link" data-template="sa_powerlink_keyword" download="sa_powerlink_keyword_template.csv">CSV 템플릿 다운로드</a>
-            <form class="upload-form" data-raw-type="sa_powerlink_keyword">
+            <h3 class="upload-card-title">캠페인 Raw</h3>
+            <code class="upload-columns">기간, 캠페인 유형(파워링크/쇼핑검색/브랜드검색), 캠페인 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_campaign" download="sa_campaign_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_campaign">
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
@@ -446,10 +446,10 @@
           </div>
 
           <div class="upload-card">
-            <h3 class="upload-card-title">쇼핑검색 - 키워드별 성과</h3>
-            <code class="upload-columns">기간, 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
-            <a class="upload-template-link" data-template="sa_shopping_keyword" download="sa_shopping_keyword_template.csv">CSV 템플릿 다운로드</a>
-            <form class="upload-form" data-raw-type="sa_shopping_keyword">
+            <h3 class="upload-card-title">그룹 Raw</h3>
+            <code class="upload-columns">기간, 캠페인 유형(파워링크/쇼핑검색/브랜드검색), 캠페인 이름, 광고그룹 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_adgroup" download="sa_adgroup_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_adgroup">
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
@@ -457,10 +457,10 @@
           </div>
 
           <div class="upload-card">
-            <h3 class="upload-card-title">브랜드검색 - 키워드별 성과</h3>
-            <code class="upload-columns">기간, 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
-            <a class="upload-template-link" data-template="sa_brand_keyword" download="sa_brand_keyword_template.csv">CSV 템플릿 다운로드</a>
-            <form class="upload-form" data-raw-type="sa_brand_keyword">
+            <h3 class="upload-card-title">키워드 Raw</h3>
+            <code class="upload-columns">기간, 캠페인 유형(파워링크/쇼핑검색/브랜드검색), 캠페인 이름, 광고그룹 이름, 키워드, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <a class="upload-template-link" data-template="sa_keyword" download="sa_keyword_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_keyword">
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
@@ -468,10 +468,10 @@
           </div>
 
           <div class="upload-card">
-            <h3 class="upload-card-title">쇼핑검색 - 상품별 성과</h3>
+            <h3 class="upload-card-title">상품 Raw (쇼핑검색 전용)</h3>
             <code class="upload-columns">기간, 상품명, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
-            <a class="upload-template-link" data-template="sa_shopping_product" download="sa_shopping_product_template.csv">CSV 템플릿 다운로드</a>
-            <form class="upload-form" data-raw-type="sa_shopping_product">
+            <a class="upload-template-link" data-template="sa_product" download="sa_product_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_product">
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
@@ -481,8 +481,8 @@
         </div>
 
         <p class="upload-note">
-          같은 종류(캠페인/그룹/ADV/키워드/상품)에서 같은 날짜(기간)로 다시 업로드하면, 그 날짜의 기존 데이터는
-          새 데이터로 교체됩니다 (중복 누적 방지).
+          같은 종류(캠페인/그룹/ADV/소재/키워드/상품)에서 같은 날짜(기간, SA는 캠페인 유형까지)로
+          다시 업로드하면, 그 조합의 기존 데이터는 새 데이터로 교체됩니다 (중복 누적 방지).
         </p>
       </div>
 

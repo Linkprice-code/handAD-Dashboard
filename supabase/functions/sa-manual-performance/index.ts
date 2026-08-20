@@ -2,8 +2,8 @@
 // 헤더: Authorization: Bearer <anon key>  (Supabase 게이트웨이 JWT 검증용, 필수)
 //       apikey: <anon key>
 //       X-Session-Token: <advertiser-login이 발급한 세션 토큰>
-// body (집계 - 캠페인 유형별/캠페인별/상품별):
-//   { mode: "aggregate", group_by: "type" | "campaign" | "product",
+// body (집계 - 캠페인 유형별/캠페인별/그룹별/상품별):
+//   { mode: "aggregate", group_by: "type" | "campaign" | "adgroup" | "product",
 //     date_from?: "YYYY-MM-DD", date_to?: "YYYY-MM-DD" }
 //   -> { success: true, rows: [{ name, impressions, clicks, cost, conversions, revenue, ctr, cvr, roas, cpa }] }
 //
@@ -12,12 +12,11 @@
 //     date_from?: "YYYY-MM-DD", date_to?: "YYYY-MM-DD" }
 //   -> { success: true, rows: [{ keyword, ad_group, campaign, impressions, clicks, cost, ctr, cpc }] }
 //
-// sa-manual-upload가 수기 업로드로 채운 sa_manual_keyword_raw / sa_manual_product_raw에서,
-// 세션 토큰으로 검증된 advertiser_id의 행만 날짜 범위(있으면) 안에서 가져와 집계해 돌려준다.
-// 캠페인 유형별/캠페인별 성과는 별도 캠페인 Raw 테이블 없이, 키워드 raw를 campaign_type/
-// campaign 기준으로 합산해서 만든다(키워드 리포트가 그 캠페인의 전체 키워드를 담고 있다는
-// 전제). gfa-performance / (기존) sa-performance와 동일한 응답 형태를 최대한 유지해서
-// 프론트엔드가 API 자동 동기화용 응답과 동일하게 다룰 수 있게 한다.
+// sa-manual-upload가 수기 업로드로 채운 sa_manual_campaign_raw / sa_manual_adgroup_raw /
+// sa_manual_keyword_raw / sa_manual_product_raw(GFA와 동일한 캠페인/그룹/키워드/상품 raw
+// 4종 구조)에서, 세션 토큰으로 검증된 advertiser_id의 행만 날짜 범위(있으면) 안에서 가져와
+// 집계해 돌려준다. gfa-performance / (기존) sa-performance와 동일한 응답 형태를 최대한
+// 유지해서 프론트엔드가 API 자동 동기화용 응답과 동일하게 다룰 수 있게 한다.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
@@ -110,8 +109,9 @@ const CAMPAIGN_TYPES = new Set(["WEB_SITE", "SHOPPING", "BRAND_SEARCH"]);
    group_by별 설정(집계 모드) - 테이블/그룹기준 컬럼은 여기 허용 목록에서만 고른다
 --------------------------------------------------------- */
 const AGGREGATE_CONFIG: Record<string, { table: string; nameField: string }> = {
-  type: { table: "sa_manual_keyword_raw", nameField: "campaign_type" },
-  campaign: { table: "sa_manual_keyword_raw", nameField: "campaign" },
+  type: { table: "sa_manual_campaign_raw", nameField: "campaign_type" },
+  campaign: { table: "sa_manual_campaign_raw", nameField: "campaign" },
+  adgroup: { table: "sa_manual_adgroup_raw", nameField: "ad_group" },
   product: { table: "sa_manual_product_raw", nameField: "product" },
 };
 

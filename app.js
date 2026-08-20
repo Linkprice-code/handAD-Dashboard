@@ -884,8 +884,8 @@ async function renderSaOverview() {
   state.campaignTypeRows = currentResult.rows;
   renderCampaignTypeRows();
 
-  if (state.breakdownRawType === "campaign") {
-    await loadSaBreakdownData();
+  if (state.breakdownRawType === "campaign" || state.breakdownRawType === "adgroup") {
+    await loadSaBreakdownData(state.breakdownRawType);
   } else {
     renderSaBreakdownPlaceholder();
   }
@@ -1053,8 +1053,8 @@ breakdownFilter.addEventListener("click", (e) => {
 
   if (state.currentChannel === "GFA") {
     loadBreakdownData();
-  } else if (state.breakdownRawType === "campaign") {
-    loadSaBreakdownData();
+  } else if (state.breakdownRawType === "campaign" || state.breakdownRawType === "adgroup") {
+    loadSaBreakdownData(state.breakdownRawType);
   } else {
     renderSaBreakdownPlaceholder();
   }
@@ -1095,11 +1095,11 @@ async function loadBreakdownData() {
   renderBreakdownRows();
 }
 
-async function loadSaBreakdownData() {
+async function loadSaBreakdownData(groupBy) {
   const token = ++state.overviewRenderToken;
   breakdownTableBody.innerHTML = '<tr><td colspan="9" class="grouped-empty">불러오는 중...</td></tr>';
 
-  const result = await fetchSaPerformance("campaign", {
+  const result = await fetchSaPerformance(groupBy, {
     dateFrom: state.analysisPeriod.from,
     dateTo: state.analysisPeriod.to
   });
@@ -1117,11 +1117,11 @@ async function loadSaBreakdownData() {
   renderBreakdownRows();
 }
 
-// 그룹별(광고그룹) 단위는 아직 범위 밖이라 안내 문구만 보여준다.
+// ADVoost 쇼핑 탭은 GFA 전용이라 SA에서는 숨겨지지만(gfa-only-tab), 안전장치로 남겨둔다.
 function renderSaBreakdownPlaceholder() {
   state.breakdownRows = [];
   breakdownTableBody.innerHTML =
-    '<tr><td colspan="9" class="grouped-empty">광고그룹별 데이터는 다음 업데이트에서 제공될 예정입니다.</td></tr>';
+    '<tr><td colspan="9" class="grouped-empty">표시할 수 없는 항목입니다.</td></tr>';
   updateSortIndicators();
 }
 
@@ -1620,9 +1620,9 @@ function renderUploadView() {
   } else {
     uploadViewTitle.textContent = "SA 데이터 업로드";
     uploadViewIntro.innerHTML =
-      '네이버 검색광고 관리시스템에서 다운로드한 파워링크/쇼핑검색/브랜드검색 <b>키워드별</b> 리포트와 ' +
-      '쇼핑검색 <b>상품별</b> 리포트 파일을 <b>수정 없이 그대로</b> 올리시면 됩니다. 캠페인별/캠페인 ' +
-      '유형별 성과는 별도로 올릴 필요 없이 키워드 리포트를 합산해서 자동으로 계산됩니다.';
+      '네이버 검색광고 관리시스템에서 다운로드한 캠페인/그룹/키워드/상품 리포트 파일을 ' +
+      '<b>수정 없이 그대로</b> 올리시면 됩니다. 파워링크/쇼핑검색/브랜드검색은 파일을 따로 ' +
+      '올릴 필요 없이 <b>"캠페인 유형" 컬럼</b>으로 구분됩니다 (한 파일에 여러 유형이 섞여 있어도 됩니다).';
   }
 }
 
@@ -1699,34 +1699,31 @@ const GFA_RAW_TYPE_COLUMNS = {
   adgroup: ["date", "campaign", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
   adv: ["date", "product", "impressions", "clicks", "cost", "conversions", "revenue"],
   creative: ["date", "creative", "impressions", "clicks", "cost", "conversions", "revenue"],
-  // SA 수기 업로드 - 파워링크/쇼핑검색/브랜드검색은 네이버에서 리포트를 애초에 따로 내려주므로
-  // 캠페인 유형은 CSV 컬럼이 아니라 raw_type(=어느 카드에 올렸는지)으로 서버에서 정해진다.
-  // 캠페인별/캠페인 유형별 성과 카드는 따로 없다 - 키워드 리포트가 그 캠페인의 전체 키워드를
-  // 담고 있다는 전제로, 성과 대시보드가 이 키워드 데이터를 합산해서 만든다.
-  sa_powerlink_keyword: ["date", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_shopping_keyword: ["date", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_brand_keyword: ["date", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_shopping_product: ["date", "product", "impressions", "clicks", "cost", "conversions", "revenue"]
+  // SA 수기 업로드 - GFA와 동일하게 캠페인/그룹/키워드/상품 Raw 4종이다. 파워링크/쇼핑검색/
+  // 브랜드검색은 raw_type(=어느 카드에 올렸는지)이 아니라 CSV 안의 campaign_type(캠페인 유형)
+  // 컬럼으로 구분하므로, 한 파일에 여러 유형이 섞여 있어도 된다(캠페인/그룹/키워드 Raw는 필수).
+  sa_campaign: ["date", "campaign_type", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_adgroup: ["date", "campaign_type", "campaign", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_keyword: ["date", "campaign_type", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_product: ["date", "product", "impressions", "clicks", "cost", "conversions", "revenue"]
 };
 
 // requiredColumns와 달리, CSV에 없어도 업로드 자체는 막지 않는 추가 컬럼
-// (campaign_type은 캠페인 Raw에만 있고, 예전에 만든 템플릿이나 구버전 파일에는 없을 수 있다.
-//  ad_group은 SA 키워드 리포트에 캠페인/광고그룹 컬럼이 없는 형태로 다운로드됐을 때를 대비한다).
+// (ad_group은 SA 키워드 리포트에 캠페인/광고그룹 컬럼이 없는 형태로 다운로드됐을 때를 대비한다).
 const GFA_OPTIONAL_COLUMNS = {
-  campaign: ["campaign_type"],
-  sa_powerlink_keyword: ["ad_group"],
-  sa_shopping_keyword: ["ad_group"],
-  sa_brand_keyword: ["ad_group"]
+  sa_keyword: ["ad_group"]
 };
 
 // 내부 필드명 -> 실제 CSV에 올 수 있는 헤더 이름 후보 (전부 소문자/trim 비교)
-// 주의: SA 헤더 후보(키워드/전환수 등)는 실제 네이버 검색광고 다운로드 파일로 아직
-// 검증되지 않았다 - 표준적으로 쓰이는 이름들을 등록해뒀지만, 실제 업로드가 안 되면
+// 주의: SA 헤더 후보(캠페인 유형/키워드/전환수 등)는 실제 네이버 검색광고 다운로드 파일로
+// 아직 검증되지 않았다 - 표준적으로 쓰이는 이름들을 등록해뒀지만, 실제 업로드가 안 되면
 // 그 CSV의 첫 줄(헤더) 그대로 알려주면 후보를 추가해서 바로 잡을 수 있다.
 const GFA_HEADER_ALIASES = {
   date: ["date", "기간", "날짜", "일자"],
   campaign: ["campaign", "캠페인 이름", "캠페인명"],
-  campaign_type: ["campaign_type", "캠페인 목적"],
+  // GFA는 캠페인 "목적"(웹사이트 전환 등, 설명용) 표기, SA는 캠페인 "유형"(파워링크/쇼핑검색/
+  // 브랜드검색, 페이지 분류용) 표기를 쓴다 - 같은 내부 필드를 공유하되 후보만 늘려둔다.
+  campaign_type: ["campaign_type", "캠페인 목적", "캠페인 유형"],
   ad_group: ["ad_group", "광고 그룹 이름", "광고그룹 이름", "광고그룹명"],
   keyword: ["keyword", "키워드", "키워드 이름"],
   product: ["product", "상품명", "상품 이름"],
@@ -1739,6 +1736,22 @@ const GFA_HEADER_ALIASES = {
   conversions: ["conversions", "구매완료 수", "구매완료수", "전환수"],
   revenue: ["revenue", "구매완료 전환매출액", "구매완료 매출액", "구매완료전환매출액", "전환매출액"]
 };
+
+// SA campaign_type 셀 값(파워링크/쇼핑검색/브랜드검색 등)을 서버가 이해하는 코드로 정규화한다.
+// 어느 후보와도 안 맞으면 null - 업로드 시점에 오류로 처리한다.
+const SA_CAMPAIGN_TYPE_ALIASES = {
+  WEB_SITE: ["web_site", "파워링크", "웹사이트"],
+  SHOPPING: ["shopping", "쇼핑검색", "쇼핑"],
+  BRAND_SEARCH: ["brand_search", "브랜드검색", "브랜드"]
+};
+
+function normalizeSaCampaignType(raw) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  for (const [code, aliases] of Object.entries(SA_CAMPAIGN_TYPE_ALIASES)) {
+    if (aliases.includes(value)) return code;
+  }
+  return null;
+}
 
 const GFA_RAW_TYPE_TEMPLATE_CSV = {
   campaign:
@@ -1753,16 +1766,17 @@ const GFA_RAW_TYPE_TEMPLATE_CSV = {
   creative:
     "date,creative,impressions,clicks,cost,conversions,revenue\n" +
     "2026-08-01,여름신상_소재A,15200,320,540000,18,3200000\n",
-  sa_powerlink_keyword:
-    "date,campaign,ad_group,keyword,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,여름신상_파워링크,그룹A,여름원피스,15200,320,540000,18,3200000\n",
-  sa_shopping_keyword:
-    "date,campaign,ad_group,keyword,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,여름신상_쇼핑검색,그룹A,여름원피스,15200,320,540000,18,3200000\n",
-  sa_brand_keyword:
-    "date,campaign,ad_group,keyword,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,브랜드검색_캠페인,그룹A,브랜드명,15200,320,540000,18,3200000\n",
-  sa_shopping_product:
+  sa_campaign:
+    "date,campaign_type,campaign,impressions,clicks,cost,conversions,revenue\n" +
+    "2026-08-01,파워링크,여름신상_파워링크,15200,320,540000,18,3200000\n" +
+    "2026-08-01,쇼핑검색,여름신상_쇼핑검색,9800,210,310000,9,1200000\n",
+  sa_adgroup:
+    "date,campaign_type,campaign,ad_group,impressions,clicks,cost,conversions,revenue\n" +
+    "2026-08-01,파워링크,여름신상_파워링크,그룹A,15200,320,540000,18,3200000\n",
+  sa_keyword:
+    "date,campaign_type,campaign,ad_group,keyword,impressions,clicks,cost,conversions,revenue\n" +
+    "2026-08-01,파워링크,여름신상_파워링크,그룹A,여름원피스,15200,320,540000,18,3200000\n",
+  sa_product:
     "date,product,impressions,clicks,cost,conversions,revenue\n" +
     "2026-08-01,여름원피스,15200,320,540000,18,3200000\n"
 };
@@ -1900,6 +1914,22 @@ document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
     try {
       const text = await file.text();
       const rows = parseGfaCsv(text, GFA_RAW_TYPE_COLUMNS[rawType], GFA_OPTIONAL_COLUMNS[rawType] || []);
+
+      // SA 캠페인/그룹/키워드 Raw는 campaign_type 셀 값(파워링크/쇼핑검색/브랜드검색 등)을
+      // 서버가 쓰는 코드(WEB_SITE/SHOPPING/BRAND_SEARCH)로 미리 정규화해서, 잘못된 값이면
+      // 업로드 전에 바로 알려준다.
+      if (rawType === "sa_campaign" || rawType === "sa_adgroup" || rawType === "sa_keyword") {
+        rows.forEach((row, i) => {
+          const normalized = normalizeSaCampaignType(row.campaign_type);
+          if (!normalized) {
+            throw new Error(
+              `${i + 1}번째 행: 캠페인 유형 값("${row.campaign_type}")을 인식하지 못했습니다. ` +
+              `파워링크/쇼핑검색/브랜드검색 중 하나로 입력해주세요.`
+            );
+          }
+          row.campaign_type = normalized;
+        });
+      }
 
       if (rows.length === 0) {
         throw new Error("업로드할 데이터가 없습니다.");
