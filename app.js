@@ -1715,16 +1715,17 @@ const GFA_OPTIONAL_COLUMNS = {
 };
 
 // 내부 필드명 -> 실제 CSV에 올 수 있는 헤더 이름 후보 (전부 소문자/trim 비교)
-// 주의: SA 헤더 후보(캠페인 유형/키워드/전환수 등)는 실제 네이버 검색광고 다운로드 파일로
-// 아직 검증되지 않았다 - 표준적으로 쓰이는 이름들을 등록해뒀지만, 실제 업로드가 안 되면
-// 그 CSV의 첫 줄(헤더) 그대로 알려주면 후보를 추가해서 바로 잡을 수 있다.
+// SA 헤더 후보 중 "일별"/"캠페인유형"/"캠페인"/"구매완료 전환수"/"구매완료 전환매출액(원)"은
+// 네이버 검색광고 관리시스템의 실제 "SA_Daily Overview" 다운로드 파일로 확인한 것이다
+// (2026-08-21). 다른 SA 후보(키워드/광고그룹 등)는 아직 실제 파일로 검증되지 않았다 -
+// 업로드가 안 되면 그 CSV의 헤더 줄 그대로 알려주면 후보를 추가해서 바로 잡을 수 있다.
 const GFA_HEADER_ALIASES = {
-  date: ["date", "기간", "날짜", "일자"],
-  campaign: ["campaign", "캠페인 이름", "캠페인명"],
+  date: ["date", "기간", "날짜", "일자", "일별"],
+  campaign: ["campaign", "캠페인 이름", "캠페인명", "캠페인"],
   // GFA는 캠페인 "목적"(웹사이트 전환 등, 설명용) 표기, SA는 캠페인 "유형"(파워링크/쇼핑검색/
   // 브랜드검색, 페이지 분류용) 표기를 쓴다 - 같은 내부 필드를 공유하되 후보만 늘려둔다.
-  campaign_type: ["campaign_type", "캠페인 목적", "캠페인 유형"],
-  ad_group: ["ad_group", "광고 그룹 이름", "광고그룹 이름", "광고그룹명"],
+  campaign_type: ["campaign_type", "캠페인 목적", "캠페인 유형", "캠페인유형"],
+  ad_group: ["ad_group", "광고 그룹 이름", "광고그룹 이름", "광고그룹명", "광고그룹"],
   keyword: ["keyword", "키워드", "키워드 이름"],
   product: ["product", "상품명", "상품 이름"],
   creative: ["creative", "소재 이름", "소재명", "소재"],
@@ -1732,9 +1733,16 @@ const GFA_HEADER_ALIASES = {
   clicks: ["clicks", "클릭수"],
   cost: ["cost", "총비용", "비용"],
   // 전환/매출은 종류가 여러 개(총 전환수, 회원가입 수 등) 나오는데
-  // GFA는 "구매완료" 기준만 쓰고, SA는 "전환" 기준 표기를 추가로 인식한다.
-  conversions: ["conversions", "구매완료 수", "구매완료수", "전환수"],
-  revenue: ["revenue", "구매완료 전환매출액", "구매완료 매출액", "구매완료전환매출액", "전환매출액"]
+  // GFA는 "구매완료" 기준만 쓰고, SA는 "구매완료 전환수"/"전환수" 표기를 추가로 인식한다.
+  conversions: ["conversions", "구매완료 수", "구매완료수", "전환수", "구매완료 전환수"],
+  revenue: [
+    "revenue",
+    "구매완료 전환매출액",
+    "구매완료 매출액",
+    "구매완료전환매출액",
+    "전환매출액",
+    "구매완료 전환매출액(원)"
+  ]
 };
 
 // SA campaign_type 셀 값(파워링크/쇼핑검색/브랜드검색 등)을 서버가 이해하는 코드로 정규화한다.
@@ -1841,28 +1849,45 @@ function findColumnIndex(header, aliases) {
   return -1;
 }
 
+// 실제 헤더 줄을 찾는다 - 첫 줄부터 순서대로 살펴보다가, 필수 컬럼이 전부 매칭되는
+// 첫 번째 줄을 헤더로 쓴다. 네이버 리포트는 보통 헤더가 첫 줄이지만, SA 리포트처럼
+// 맨 위에 "SA_Daily Overview(2026.07.01.~2026.08.19.),1903725" 같은 제목 줄이 한
+// 줄 더 있는 경우도 있어서(광고주 고객번호까지 같이 들어있다), 최대 5줄까지 훑는다.
+const MAX_HEADER_SCAN_LINES = 5;
+
+function findHeaderRow(lines, requiredColumns) {
+  let firstAttemptMissing = null;
+
+  for (let i = 0; i < Math.min(MAX_HEADER_SCAN_LINES, lines.length - 1); i++) {
+    const header = splitCsvLine(lines[i]).map((h) => h.trim().toLowerCase());
+    const columnIndex = {};
+    const missing = [];
+
+    requiredColumns.forEach((field) => {
+      const idx = findColumnIndex(header, GFA_HEADER_ALIASES[field] || [field]);
+      if (idx === -1) {
+        missing.push((GFA_HEADER_ALIASES[field] || [field])[0]);
+      } else {
+        columnIndex[field] = idx;
+      }
+    });
+
+    if (missing.length === 0) {
+      return { rowIndex: i, header, columnIndex };
+    }
+    if (firstAttemptMissing === null) firstAttemptMissing = missing;
+  }
+
+  throw new Error(`CSV에서 다음 컬럼을 찾지 못했습니다: ${firstAttemptMissing.join(", ")}`);
+}
+
 function parseGfaCsv(text, requiredColumns, optionalColumns = []) {
   const lines = text.split(/\r\n|\n|\r/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) {
     throw new Error("업로드할 데이터가 없습니다 (헤더 다음 줄부터 데이터가 있어야 합니다).");
   }
 
-  const header = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
-
-  const columnIndex = {};
-  const missing = [];
-  requiredColumns.forEach((field) => {
-    const idx = findColumnIndex(header, GFA_HEADER_ALIASES[field] || [field]);
-    if (idx === -1) {
-      missing.push((GFA_HEADER_ALIASES[field] || [field])[0]);
-    } else {
-      columnIndex[field] = idx;
-    }
-  });
-
-  if (missing.length > 0) {
-    throw new Error(`CSV에서 다음 컬럼을 찾지 못했습니다: ${missing.join(", ")}`);
-  }
+  const { rowIndex: headerRowIndex, header, columnIndex } = findHeaderRow(lines, requiredColumns);
 
   // optionalColumns는 없어도 업로드를 막지 않는다 - 있으면 같이 담고, 없으면 그냥 건너뛴다.
   optionalColumns.forEach((field) => {
@@ -1872,7 +1897,7 @@ function parseGfaCsv(text, requiredColumns, optionalColumns = []) {
 
   const allFields = [...requiredColumns, ...optionalColumns];
 
-  return lines.slice(1).map((line) => {
+  return lines.slice(headerRowIndex + 1).map((line) => {
     const cells = splitCsvLine(line);
     const row = {};
 
