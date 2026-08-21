@@ -129,7 +129,10 @@ const RAW_TYPE_CONFIG: Record<string, RawTypeConfig> = {
   sa_product: { table: "sa_manual_product_raw", campaignTypeRequired: false, textFields: ["product"] },
 };
 
-const MAX_ROWS = 20000;
+// SA 키워드(검색어) Raw는 검색어 단위라 4만 행을 넘는 파일도 흔하다 (2026-08-21 실제
+// 파일로 확인, 최대 42,546행). GFA 원래 한도(2만)보다 넉넉하게 잡는다.
+const MAX_ROWS = 100000;
+const INSERT_BATCH_SIZE = 2000; // 한 번에 너무 큰 insert를 보내지 않도록 나눠서 넣는다.
 const MAX_TEXT_LENGTH = 200;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const NUMERIC_FIELDS = ["impressions", "clicks", "cost", "conversions", "revenue"];
@@ -341,11 +344,14 @@ Deno.serve(async (req: Request) => {
     ...r,
   }));
 
-  const { error: insertError } = await supabase.from(config.table).insert(insertRows);
-
-  if (insertError) {
-    console.error("sa-manual-upload insert error:", insertError.message);
-    return jsonResponse({ success: false, message: "데이터 저장 중 오류가 발생했습니다." }, 500, headers);
+  // 한 번에 몇만 행을 그대로 insert하면 요청이 너무 커질 수 있어서, 배치로 나눠 넣는다.
+  for (let i = 0; i < insertRows.length; i += INSERT_BATCH_SIZE) {
+    const batch = insertRows.slice(i, i + INSERT_BATCH_SIZE);
+    const { error: insertError } = await supabase.from(config.table).insert(batch);
+    if (insertError) {
+      console.error("sa-manual-upload insert error:", insertError.message);
+      return jsonResponse({ success: false, message: "데이터 저장 중 오류가 발생했습니다." }, 500, headers);
+    }
   }
 
   return jsonResponse(

@@ -1803,7 +1803,9 @@ const GFA_RAW_TYPE_TEMPLATE_CSV = {
     "2026-08-01,여름원피스,15200,320,540000,18,3200000\n"
 };
 
-const GFA_MAX_UPLOAD_ROWS = 20000;
+// SA 키워드(검색어) Raw는 검색어 하나하나가 다 행이 되다 보니 4만 행을 넘는 파일도
+// 흔해서(2026-08-21 실제 파일로 확인), GFA 원래 한도(2만)보다 넉넉하게 잡는다.
+const GFA_MAX_UPLOAD_ROWS = 100000;
 const GFA_NUMERIC_FIELDS = ["impressions", "clicks", "cost", "conversions", "revenue"];
 
 function splitCsvLine(line) {
