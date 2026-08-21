@@ -1701,17 +1701,22 @@ const GFA_RAW_TYPE_COLUMNS = {
   creative: ["date", "creative", "impressions", "clicks", "cost", "conversions", "revenue"],
   // SA 수기 업로드 - GFA와 동일하게 캠페인/그룹/키워드/상품 Raw 4종이다. 파워링크/쇼핑검색/
   // 브랜드검색은 raw_type(=어느 카드에 올렸는지)이 아니라 CSV 안의 campaign_type(캠페인 유형)
-  // 컬럼으로 구분하므로, 한 파일에 여러 유형이 섞여 있어도 된다(캠페인/그룹/키워드 Raw는 필수).
+  // 컬럼으로 구분하므로, 한 파일에 여러 유형이 섞여 있어도 된다. 네이버 SA_Daily Overview
+  // 리포트는 그룹/키워드(검색어) 단위로 내려받으면 캠페인 이름 컬럼 자체가 없다(실제 파일로
+  // 확인, 2026-08-21) - 그래서 campaign은 캠페인 Raw에서만 필수이고 그룹/키워드 Raw에서는
+  // 선택 컬럼이다.
   sa_campaign: ["date", "campaign_type", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_adgroup: ["date", "campaign_type", "campaign", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_keyword: ["date", "campaign_type", "campaign", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_adgroup: ["date", "campaign_type", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_keyword: ["date", "campaign_type", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
   sa_product: ["date", "product", "impressions", "clicks", "cost", "conversions", "revenue"]
 };
 
 // requiredColumns와 달리, CSV에 없어도 업로드 자체는 막지 않는 추가 컬럼
-// (ad_group은 SA 키워드 리포트에 캠페인/광고그룹 컬럼이 없는 형태로 다운로드됐을 때를 대비한다).
+// (campaign은 그룹/키워드 리포트에 없는 게 정상이지만, 있는 파일이 오면 같이 담는다.
+//  ad_group은 SA 키워드 리포트에 광고그룹 컬럼이 없는 형태로 다운로드됐을 때를 대비한다).
 const GFA_OPTIONAL_COLUMNS = {
-  sa_keyword: ["ad_group"]
+  sa_adgroup: ["campaign"],
+  sa_keyword: ["campaign", "ad_group"]
 };
 
 // 내부 필드명 -> 실제 CSV에 올 수 있는 헤더 이름 후보 (전부 소문자/trim 비교)
@@ -1726,7 +1731,8 @@ const GFA_HEADER_ALIASES = {
   // 브랜드검색, 페이지 분류용) 표기를 쓴다 - 같은 내부 필드를 공유하되 후보만 늘려둔다.
   campaign_type: ["campaign_type", "캠페인 목적", "캠페인 유형", "캠페인유형"],
   ad_group: ["ad_group", "광고 그룹 이름", "광고그룹 이름", "광고그룹명", "광고그룹"],
-  keyword: ["keyword", "키워드", "키워드 이름"],
+  // 네이버 SA_Daily Overview 리포트는 키워드 단위를 "검색어"라고 표기한다 (실제 파일로 확인).
+  keyword: ["keyword", "키워드", "키워드 이름", "검색어"],
   product: ["product", "상품명", "상품 이름"],
   creative: ["creative", "소재 이름", "소재명", "소재"],
   impressions: ["impressions", "노출수"],
@@ -1755,10 +1761,16 @@ const SA_CAMPAIGN_TYPE_ALIASES = {
   BRAND_SEARCH: ["brand_search", "브랜드검색", "브랜드", "브랜드검색/신제품검색", "신제품검색"]
 };
 
-function normalizeSaCampaignType(raw) {
+// campaignName은 선택값이다 - 캠페인 유형 값이 후보 목록에 없어도, 캠페인 이름 자체에
+// "브랜드검색"이 들어있으면 브랜드검색으로 분류한다(네이버 리포트마다 캠페인 유형
+// 표기가 조금씩 달라서 두는 안전장치).
+function normalizeSaCampaignType(raw, campaignName) {
   const value = String(raw ?? "").trim().toLowerCase();
   for (const [code, aliases] of Object.entries(SA_CAMPAIGN_TYPE_ALIASES)) {
     if (aliases.includes(value)) return code;
+  }
+  if (campaignName && String(campaignName).includes("브랜드검색")) {
+    return "BRAND_SEARCH";
   }
   return null;
 }
@@ -1781,11 +1793,11 @@ const GFA_RAW_TYPE_TEMPLATE_CSV = {
     "2026-08-01,파워링크,여름신상_파워링크,15200,320,540000,18,3200000\n" +
     "2026-08-01,쇼핑검색,여름신상_쇼핑검색,9800,210,310000,9,1200000\n",
   sa_adgroup:
-    "date,campaign_type,campaign,ad_group,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,파워링크,여름신상_파워링크,그룹A,15200,320,540000,18,3200000\n",
+    "date,campaign_type,ad_group,impressions,clicks,cost,conversions,revenue\n" +
+    "2026-08-01,파워링크,여름신상_파워링크_그룹A,15200,320,540000,18,3200000\n",
   sa_keyword:
-    "date,campaign_type,campaign,ad_group,keyword,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,파워링크,여름신상_파워링크,그룹A,여름원피스,15200,320,540000,18,3200000\n",
+    "date,campaign_type,keyword,impressions,clicks,cost,conversions,revenue\n" +
+    "2026-08-01,파워링크,여름원피스,15200,320,540000,18,3200000\n",
   sa_product:
     "date,product,impressions,clicks,cost,conversions,revenue\n" +
     "2026-08-01,여름원피스,15200,320,540000,18,3200000\n"

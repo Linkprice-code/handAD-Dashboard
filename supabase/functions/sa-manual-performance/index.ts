@@ -204,7 +204,8 @@ Deno.serve(async (req: Request) => {
     for (const row of (data ?? []) as Record<string, unknown>[]) {
       const keyword = String(row.keyword ?? "");
       const adGroup = String(row.ad_group ?? "") || "-";
-      const campaign = String(row.campaign ?? "");
+      // 네이버 키워드(검색어) 리포트에는 캠페인 이름 컬럼이 없는 경우가 흔하다.
+      const campaign = String(row.campaign ?? "") || "-";
       const key = `${campaign}|||${adGroup}|||${keyword}`;
       const acc = groups.get(key) ?? { keyword, ad_group: adGroup, campaign, impressions: 0, clicks: 0, cost: 0 };
       acc.impressions += Number(row.impressions ?? 0);

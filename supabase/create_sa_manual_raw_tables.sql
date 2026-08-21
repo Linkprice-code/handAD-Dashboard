@@ -43,7 +43,7 @@ create table if not exists sa_manual_adgroup_raw (
   advertiser_id uuid not null references advertisers(id) on delete cascade,
   date date not null,
   campaign_type text not null check (campaign_type in ('WEB_SITE', 'SHOPPING', 'BRAND_SEARCH')),
-  campaign text not null,
+  campaign text, -- 네이버 그룹 단위 리포트에는 캠페인 이름 컬럼이 없다
   ad_group text not null,
   impressions bigint not null default 0,
   clicks bigint not null default 0,
@@ -63,7 +63,7 @@ create table if not exists sa_manual_keyword_raw (
   advertiser_id uuid not null references advertisers(id) on delete cascade,
   date date not null,
   campaign_type text not null check (campaign_type in ('WEB_SITE', 'SHOPPING', 'BRAND_SEARCH')),
-  campaign text not null,
+  campaign text, -- 네이버 키워드(검색어) 단위 리포트에는 캠페인 이름 컬럼이 없다
   ad_group text,
   keyword text not null,
   impressions bigint not null default 0,

@@ -109,18 +109,22 @@ interface RawTypeConfig {
   optionalTextFields?: string[];
 }
 
+// 네이버 SA_Daily Overview 리포트는 그룹/키워드(검색어) 단위로 내려받으면 캠페인 이름
+// 컬럼 자체가 없다(실제 파일로 확인, 2026-08-21) - 그래서 campaign은 캠페인 Raw에서만
+// 필수이고, 그룹/키워드 Raw에서는 선택 컬럼이다.
 const RAW_TYPE_CONFIG: Record<string, RawTypeConfig> = {
   sa_campaign: { table: "sa_manual_campaign_raw", campaignTypeRequired: true, textFields: ["campaign"] },
   sa_adgroup: {
     table: "sa_manual_adgroup_raw",
     campaignTypeRequired: true,
-    textFields: ["campaign", "ad_group"],
+    textFields: ["ad_group"],
+    optionalTextFields: ["campaign"],
   },
   sa_keyword: {
     table: "sa_manual_keyword_raw",
     campaignTypeRequired: true,
-    textFields: ["campaign", "keyword"],
-    optionalTextFields: ["ad_group"],
+    textFields: ["keyword"],
+    optionalTextFields: ["campaign", "ad_group"],
   },
   sa_product: { table: "sa_manual_product_raw", campaignTypeRequired: false, textFields: ["product"] },
 };
