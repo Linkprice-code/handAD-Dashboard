@@ -286,17 +286,17 @@
             <input type="text" id="keywordSearchInput" class="model-search-input" placeholder="키워드명 검색">
           </div>
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table" id="keywordTable">
               <thead>
                 <tr>
-                  <th>키워드</th>
-                  <th>캠페인</th>
-                  <th>광고그룹</th>
-                  <th>노출수</th>
-                  <th>클릭수</th>
-                  <th>CTR</th>
-                  <th>비용</th>
-                  <th>CPC</th>
+                  <th class="sortable" data-sort-key="keyword">키워드</th>
+                  <th class="sortable" data-sort-key="campaign">캠페인</th>
+                  <th class="sortable" data-sort-key="ad_group">광고그룹</th>
+                  <th class="sortable" data-sort-key="impressions">노출수</th>
+                  <th class="sortable" data-sort-key="clicks">클릭수</th>
+                  <th class="sortable" data-sort-key="ctr">CTR</th>
+                  <th class="sortable" data-sort-key="cost">비용</th>
+                  <th class="sortable" data-sort-key="cpc">CPC</th>
                 </tr>
               </thead>
               <tbody id="keywordTableBody"></tbody>

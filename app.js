@@ -391,6 +391,7 @@ const keywordViewTitle = document.getElementById("keywordViewTitle");
 const keywordViewNotice = document.getElementById("keywordViewNotice");
 const keywordViewSubtitle = document.getElementById("keywordViewSubtitle");
 const keywordSearchInput = document.getElementById("keywordSearchInput");
+const keywordTable = document.getElementById("keywordTable");
 const keywordTableBody = document.getElementById("keywordTableBody");
 
 const overviewEmptyNotice = document.getElementById("overviewEmptyNotice");
@@ -421,6 +422,7 @@ const state = {
   modelViewOpts: null,
   keywordViewRows: [],
   breakdownSort: { key: "cost", dir: "desc" },
+  keywordSort: { key: "cost", dir: "desc" },
   overviewRenderToken: 0
 };
 
@@ -1087,7 +1089,7 @@ async function loadBreakdownData() {
   if (!result.success) {
     state.breakdownRows = [];
     breakdownTableBody.innerHTML = `<tr><td colspan="9" class="grouped-empty">${escapeHtml(result.message)}</td></tr>`;
-    updateSortIndicators();
+    updateSortIndicators(breakdownTable, state.breakdownSort);
     return;
   }
 
@@ -1109,7 +1111,7 @@ async function loadSaBreakdownData(groupBy) {
   if (!result.success) {
     state.breakdownRows = [];
     breakdownTableBody.innerHTML = `<tr><td colspan="9" class="grouped-empty">${escapeHtml(result.message)}</td></tr>`;
-    updateSortIndicators();
+    updateSortIndicators(breakdownTable, state.breakdownSort);
     return;
   }
 
@@ -1122,7 +1124,7 @@ function renderSaBreakdownPlaceholder() {
   state.breakdownRows = [];
   breakdownTableBody.innerHTML =
     '<tr><td colspan="9" class="grouped-empty">표시할 수 없는 항목입니다.</td></tr>';
-  updateSortIndicators();
+  updateSortIndicators(breakdownTable, state.breakdownSort);
 }
 
 /* ---------------------------------------------------------
@@ -1137,6 +1139,7 @@ async function renderKeywordView(item) {
   keywordViewSubtitle.textContent = `${item.label} 키워드별 성과 상세`;
   keywordViewNotice.hidden = true;
   keywordSearchInput.value = "";
+  state.keywordSort = { key: "cost", dir: "desc" };
   keywordTableBody.innerHTML = '<tr><td colspan="8" class="grouped-empty">불러오는 중...</td></tr>';
 
   const token = ++state.overviewRenderToken;
@@ -1163,7 +1166,11 @@ async function renderKeywordView(item) {
   renderKeywordTable();
 }
 
+const KEYWORD_TEXT_SORT_KEYS = new Set(["keyword", "campaign", "ad_group"]);
+
 function renderKeywordTable() {
+  updateSortIndicators(keywordTable, state.keywordSort);
+
   const q = keywordSearchInput.value.trim().toLowerCase();
   const filtered = q
     ? state.keywordViewRows.filter((r) => r.keyword.toLowerCase().includes(q))
@@ -1176,7 +1183,15 @@ function renderKeywordTable() {
     return;
   }
 
-  keywordTableBody.innerHTML = filtered
+  const { key, dir } = state.keywordSort;
+  const sorted = [...filtered].sort((a, b) => {
+    const cmp = KEYWORD_TEXT_SORT_KEYS.has(key)
+      ? String(a[key]).localeCompare(String(b[key]), "ko")
+      : a[key] - b[key];
+    return dir === "asc" ? cmp : -cmp;
+  });
+
+  keywordTableBody.innerHTML = sorted
     .map(
       (r) => `
         <tr>
@@ -1195,6 +1210,19 @@ function renderKeywordTable() {
 }
 
 keywordSearchInput.addEventListener("input", renderKeywordTable);
+
+keywordTable.querySelector("thead").addEventListener("click", (e) => {
+  const th = e.target.closest("th.sortable");
+  if (!th) return;
+
+  const key = th.dataset.sortKey;
+  if (state.keywordSort.key === key) {
+    state.keywordSort.dir = state.keywordSort.dir === "desc" ? "asc" : "desc";
+  } else {
+    state.keywordSort = { key, dir: KEYWORD_TEXT_SORT_KEYS.has(key) ? "asc" : "desc" };
+  }
+  renderKeywordTable();
+});
 
 /* ---------------------------------------------------------
    6-2. 상품별(모델별) 성과 뷰 - 도넛/막대+선 차트 + 모델 카드 + 상세 모달
@@ -1463,7 +1491,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 function renderBreakdownRows() {
-  updateSortIndicators();
+  updateSortIndicators(breakdownTable, state.breakdownSort);
 
   if (state.breakdownRows.length === 0) {
     breakdownTableBody.innerHTML =
@@ -1496,9 +1524,11 @@ function renderBreakdownRows() {
     .join("");
 }
 
-function updateSortIndicators() {
-  breakdownTable.querySelectorAll("th.sortable").forEach((th) => {
-    const isSorted = th.dataset.sortKey === state.breakdownSort.key;
+// breakdownTable(캠페인별 성과)과 keywordTable(파워링크/쇼핑검색/브랜드검색 키워드별
+// 성과) 둘 다 컬럼 클릭 정렬을 쓰므로, 어느 테이블/정렬 상태든 공통으로 처리한다.
+function updateSortIndicators(table, sortState) {
+  table.querySelectorAll("th.sortable").forEach((th) => {
+    const isSorted = th.dataset.sortKey === sortState.key;
     th.classList.toggle("sorted", isSorted);
     let arrow = th.querySelector(".sort-arrow");
     if (!arrow) {
@@ -1506,7 +1536,7 @@ function updateSortIndicators() {
       arrow.className = "sort-arrow";
       th.appendChild(arrow);
     }
-    arrow.textContent = isSorted && state.breakdownSort.dir === "asc" ? "▲" : "▼";
+    arrow.textContent = isSorted && sortState.dir === "asc" ? "▲" : "▼";
   });
 }
 
