@@ -8,7 +8,7 @@
 
 - **Supabase 프로젝트를 원본과 공유**합니다 (`https://agglowdlyduilkjskxyx.supabase.co`).
   `advertisers` 테이블, `advertiser-login` / `gfa-upload` / `gfa-performance` Edge Function을
-  그대로 재사용합니다 (이 사이트의 새 Netlify 주소만 그 3개 함수의 CORS 허용 목록에 추가되어 있습니다).
+  그대로 재사용합니다 (이 사이트의 배포 주소 origin만 그 3개 함수의 CORS 허용 목록에 추가되어 있습니다).
 - 원본의 SA 자동 동기화 테이블(`sa_campaign_daily`, `sa_product_daily` 등)과 Edge Function
   (`sa-sync`, `sa-performance`, `sa-keyword-performance`, `sa-product-performance`,
   `sa-product-mapping-upload`)은 이 사이트에서 **전혀 쓰지 않습니다** — 이 사이트는 완전히
@@ -65,6 +65,8 @@ supabase/
 - [x] `create_sa_manual_raw_tables.sql`을 Supabase SQL Editor에서 실행
 - [x] `sa-manual-upload`, `sa-manual-performance` Edge Function 배포
 - [x] 원본의 `advertiser-login` / `gfa-upload` / `gfa-performance`의 `ALLOWED_ORIGINS`에
-      이 사이트의 Netlify 주소 추가 후 재배포
-- [x] GitHub 저장소 생성 & push (https://github.com/wjdauddba998-code/handAD-Dashboard)
-- [x] Netlify 새 사이트 연결 & Public 설정 (https://ad-dashboard-hand.netlify.app)
+      이 사이트의 배포 주소 origin 추가 후 재배포
+- [x] GitHub 저장소 생성 & push
+- [x] 배포: GitHub Pages (https://linkprice-code.github.io/handAD-Dashboard/) - 처음에는 Netlify로
+      배포했다가 GitHub Pages로 이전했다 (2026-08-21). ALLOWED_ORIGINS는 origin(스킴+호스트) 기준이라
+      `https://linkprice-code.github.io` 하나만 등록하면 되고, 그 아래 어떤 저장소/경로든 다 허용된다.

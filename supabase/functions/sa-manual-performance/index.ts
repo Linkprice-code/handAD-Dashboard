@@ -20,7 +20,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
-  "https://ad-dashboard-hand.netlify.app",
+  // Netlify에서 GitHub Pages로 이전함 (2026-08-21).
+  "https://linkprice-code.github.io",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
 ];
