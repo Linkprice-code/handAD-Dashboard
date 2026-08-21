@@ -1130,9 +1130,8 @@ function renderSaBreakdownPlaceholder() {
 /* ---------------------------------------------------------
    6-1c. 파워링크 / 쇼핑검색 / 브랜드검색 - 키워드별 성과 (SA 전용, 수기 업로드)
    ---------------------------------------------------------
-   "데이터 업로드" 메뉴에서 올린 키워드 리포트 CSV(sa_manual_keyword_raw)를
-   집계해서 보여준다. 노출수/클릭수/비용/CTR/CPC만 보여준다(전환수/전환매출액은
-   키워드 단위로는 신뢰도가 낮아 이번 버전에서는 다루지 않는다).
+   "데이터 업로드" 메뉴에서 올린 키워드 리포트 CSV(sa_manual_keyword_raw)를 키워드
+   기준으로 집계해서 보여준다 (캠페인/광고그룹 구분 없이 키워드별로 합산).
 --------------------------------------------------------- */
 async function renderKeywordView(item) {
   keywordViewTitle.textContent = `${item.label} 키워드별 성과`;
@@ -1140,7 +1139,7 @@ async function renderKeywordView(item) {
   keywordViewNotice.hidden = true;
   keywordSearchInput.value = "";
   state.keywordSort = { key: "cost", dir: "desc" };
-  keywordTableBody.innerHTML = '<tr><td colspan="8" class="grouped-empty">불러오는 중...</td></tr>';
+  keywordTableBody.innerHTML = '<tr><td colspan="10" class="grouped-empty">불러오는 중...</td></tr>';
 
   const token = ++state.overviewRenderToken;
   const result = await fetchSaKeywordPerformance(item.naverCampaignType, {
@@ -1154,7 +1153,7 @@ async function renderKeywordView(item) {
     state.keywordViewRows = [];
     keywordViewNotice.hidden = false;
     keywordViewNotice.textContent = result.message;
-    keywordTableBody.innerHTML = `<tr><td colspan="8" class="grouped-empty">${escapeHtml(result.message)}</td></tr>`;
+    keywordTableBody.innerHTML = `<tr><td colspan="10" class="grouped-empty">${escapeHtml(result.message)}</td></tr>`;
     return;
   }
 
@@ -1166,7 +1165,7 @@ async function renderKeywordView(item) {
   renderKeywordTable();
 }
 
-const KEYWORD_TEXT_SORT_KEYS = new Set(["keyword", "campaign", "ad_group"]);
+const KEYWORD_TEXT_SORT_KEYS = new Set(["keyword"]);
 
 function renderKeywordTable() {
   updateSortIndicators(keywordTable, state.keywordSort);
@@ -1177,7 +1176,7 @@ function renderKeywordTable() {
     : state.keywordViewRows;
 
   if (filtered.length === 0) {
-    keywordTableBody.innerHTML = `<tr><td colspan="8" class="grouped-empty">${
+    keywordTableBody.innerHTML = `<tr><td colspan="10" class="grouped-empty">${
       state.keywordViewRows.length === 0 ? "데이터가 없습니다." : "검색 결과가 없습니다."
     }</td></tr>`;
     return;
@@ -1196,13 +1195,15 @@ function renderKeywordTable() {
       (r) => `
         <tr>
           <td>${escapeHtml(r.keyword)}</td>
-          <td>${escapeHtml(r.campaign)}</td>
-          <td>${escapeHtml(r.ad_group)}</td>
           <td>${formatNumber(r.impressions)}</td>
           <td>${formatNumber(r.clicks)}</td>
           <td>${r.ctr.toFixed(2)}%</td>
-          <td>${formatWon(r.cost)}</td>
           <td>${formatWon(r.cpc)}</td>
+          <td>${formatWon(r.cost)}</td>
+          <td>${formatNumber(r.conversions)}</td>
+          <td>${formatWon(r.revenue)}</td>
+          <td>${r.roas}%</td>
+          <td>${formatWon(r.cpa)}</td>
         </tr>
       `
     )

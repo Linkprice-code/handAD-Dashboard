@@ -7,10 +7,11 @@
 //     date_from?: "YYYY-MM-DD", date_to?: "YYYY-MM-DD" }
 //   -> { success: true, rows: [{ name, impressions, clicks, cost, conversions, revenue, ctr, cvr, roas, cpa }] }
 //
-// body (키워드별 - 파워링크/쇼핑검색/브랜드검색 키워드별 성과 상세):
+// body (키워드별 - 파워링크/쇼핑검색/브랜드검색 키워드별 성과 상세, 캠페인/광고그룹
+//   구분 없이 키워드 기준으로 합산):
 //   { mode: "keyword", campaign_type: "WEB_SITE" | "SHOPPING" | "BRAND_SEARCH",
 //     date_from?: "YYYY-MM-DD", date_to?: "YYYY-MM-DD" }
-//   -> { success: true, rows: [{ keyword, ad_group, campaign, impressions, clicks, cost, ctr, cpc }] }
+//   -> { success: true, rows: [{ keyword, impressions, clicks, cost, conversions, revenue, ctr, cpc, roas, cpa }] }
 //
 // sa-manual-upload가 수기 업로드로 채운 sa_manual_campaign_raw / sa_manual_adgroup_raw /
 // sa_manual_keyword_raw / sa_manual_product_raw(GFA와 동일한 캠페인/그룹/키워드/상품 raw
@@ -183,7 +184,7 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from("sa_manual_keyword_raw")
-      .select("campaign, ad_group, keyword, impressions, clicks, cost")
+      .select("keyword, impressions, clicks, cost, conversions, revenue")
       .eq("advertiser_id", session.advertiser_id)
       .eq("campaign_type", campaignType);
 
@@ -196,34 +197,37 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, message: "데이터를 불러오지 못했습니다." }, 500, headers);
     }
 
+    // 캠페인/광고그룹 구분 없이 키워드 하나로만 묶는다 (같은 키워드가 여러 캠페인/그룹에
+    // 걸쳐 있어도 합산된 값 하나로 보여준다).
     const groups = new Map<
       string,
-      { keyword: string; ad_group: string; campaign: string; impressions: number; clicks: number; cost: number }
+      { keyword: string; impressions: number; clicks: number; cost: number; conversions: number; revenue: number }
     >();
 
     for (const row of (data ?? []) as Record<string, unknown>[]) {
       const keyword = String(row.keyword ?? "");
-      const adGroup = String(row.ad_group ?? "") || "-";
-      // 네이버 키워드(검색어) 리포트에는 캠페인 이름 컬럼이 없는 경우가 흔하다.
-      const campaign = String(row.campaign ?? "") || "-";
-      const key = `${campaign}|||${adGroup}|||${keyword}`;
-      const acc = groups.get(key) ?? { keyword, ad_group: adGroup, campaign, impressions: 0, clicks: 0, cost: 0 };
+      const acc = groups.get(keyword) ??
+        { keyword, impressions: 0, clicks: 0, cost: 0, conversions: 0, revenue: 0 };
       acc.impressions += Number(row.impressions ?? 0);
       acc.clicks += Number(row.clicks ?? 0);
       acc.cost += Number(row.cost ?? 0);
-      groups.set(key, acc);
+      acc.conversions += Number(row.conversions ?? 0);
+      acc.revenue += Number(row.revenue ?? 0);
+      groups.set(keyword, acc);
     }
 
     const rows = [...groups.values()]
       .map((acc) => ({
         keyword: acc.keyword,
-        ad_group: acc.ad_group,
-        campaign: acc.campaign,
         impressions: acc.impressions,
         clicks: acc.clicks,
         cost: acc.cost,
+        conversions: acc.conversions,
+        revenue: acc.revenue,
         ctr: acc.impressions > 0 ? Number(((acc.clicks / acc.impressions) * 100).toFixed(2)) : 0,
         cpc: acc.clicks > 0 ? Math.round(acc.cost / acc.clicks) : 0,
+        roas: acc.cost > 0 ? Math.round((acc.revenue / acc.cost) * 100) : 0,
+        cpa: acc.conversions > 0 ? Math.round(acc.cost / acc.conversions) : 0,
       }))
       .sort((a, b) => b.cost - a.cost);
 
