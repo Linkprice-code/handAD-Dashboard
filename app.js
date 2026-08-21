@@ -1750,7 +1750,9 @@ const GFA_HEADER_ALIASES = {
 const SA_CAMPAIGN_TYPE_ALIASES = {
   WEB_SITE: ["web_site", "파워링크", "웹사이트"],
   SHOPPING: ["shopping", "쇼핑검색", "쇼핑"],
-  BRAND_SEARCH: ["brand_search", "브랜드검색", "브랜드"]
+  // 네이버 SA_Daily Overview 리포트는 브랜드검색을 "브랜드검색/신제품검색" 복합
+  // 표기로 내려준다 (2026-08-21 실제 파일로 확인).
+  BRAND_SEARCH: ["brand_search", "브랜드검색", "브랜드", "브랜드검색/신제품검색", "신제품검색"]
 };
 
 function normalizeSaCampaignType(raw) {

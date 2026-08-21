@@ -143,6 +143,10 @@ const CAMPAIGN_TYPE_ALIASES: Record<string, string> = {
   brand_search: "BRAND_SEARCH",
   브랜드검색: "BRAND_SEARCH",
   브랜드: "BRAND_SEARCH",
+  // 네이버 SA_Daily Overview 리포트는 브랜드검색을 "브랜드검색/신제품검색" 복합
+  // 표기로 내려준다 (2026-08-21 실제 파일로 확인).
+  "브랜드검색/신제품검색": "BRAND_SEARCH",
+  신제품검색: "BRAND_SEARCH",
 };
 
 function normalizeCampaignType(raw: unknown): string | null {
