@@ -861,6 +861,13 @@ button, input, select {
   gap: 16px;
 }
 
+/* display:grid가 author 스타일이라 브라우저 기본 [hidden] { display:none }보다
+   우선순위가 높다 - SA/GFA 채널별로 안 쓰는 .channel-upload-grid를 hidden 속성으로
+   숨길 때 실제로 가려지도록 명시적으로 덮어쓴다 (60번째 줄 .login-screen[hidden]과 동일한 이유). */
+.upload-grid[hidden] {
+  display: none;
+}
+
 .upload-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
