@@ -1840,6 +1840,20 @@ function toGfaNumber(raw) {
   return cleaned === "" ? 0 : Number(cleaned);
 }
 
+// 네이버에서 다운로드한 CSV는 UTF-8이 아니라 EUC-KR(한글 레거시 인코딩)인 경우가 흔하다
+// (예: 엑셀에서 "CSV(쉼표로 분리)"로 저장하면 EUC-KR/CP949로 저장된다). UTF-8로 그냥
+// 읽으면 한글이 전부 깨진 문자로 보이고, 그 결과 헤더 인식이 통째로 실패한다.
+// UTF-8로 먼저 엄격하게(fatal) 디코딩을 시도해보고, 실패하면(=EUC-KR 바이트열은 대부분
+// 올바른 UTF-8이 아니다) EUC-KR로 다시 디코딩한다.
+async function readCsvFileAsText(file) {
+  const buffer = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("euc-kr").decode(buffer);
+  }
+}
+
 // header(첫 줄) 안에서 후보 이름들 중 하나라도 있는 컬럼의 인덱스를 찾는다.
 function findColumnIndex(header, aliases) {
   for (const alias of aliases) {
@@ -1937,7 +1951,7 @@ document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
     submitBtn.textContent = "업로드 중...";
 
     try {
-      const text = await file.text();
+      const text = await readCsvFileAsText(file);
       const rows = parseGfaCsv(text, GFA_RAW_TYPE_COLUMNS[rawType], GFA_OPTIONAL_COLUMNS[rawType] || []);
 
       // SA 캠페인/그룹/키워드 Raw는 campaign_type 셀 값(파워링크/쇼핑검색/브랜드검색 등)을
