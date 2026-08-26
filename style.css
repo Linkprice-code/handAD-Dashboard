@@ -1382,15 +1382,32 @@ button, input, select {
   .period-bar {
     padding: 14px 18px 0;
   }
+  /* 좁은 화면에서는 [햄버거][광고주명...][PDF][로그아웃]이 한 줄에 다 안 들어가서
+     "분석 기간" 텍스트가 버튼과 겹쳤다 - 분석 기간 줄을 아예 다음 줄로 내린다. */
   .topbar {
-    padding: 0 16px;
-    gap: 12px;
+    height: auto;
+    min-height: var(--topbar-height);
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    row-gap: 8px;
+  }
+  .topbar-info {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .topbar-field-period {
+    flex-basis: 100%;
   }
   .topbar-advertiser-name {
     max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .pdf-export-btn,
+  .logout-btn {
+    padding: 8px 10px;
+    font-size: 12.5px;
   }
   .login-card {
     padding: 32px 24px 24px;
