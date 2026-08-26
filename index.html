@@ -388,44 +388,60 @@
 
         <div class="upload-grid channel-upload-grid" data-channel="GFA">
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">캠페인 Raw</h3>
             <code class="upload-columns">기간, 캠페인 이름, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
             <a class="upload-template-link" data-template="campaign" download="gfa_campaign_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="campaign">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
             <p class="upload-status" hidden></p>
           </div>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">그룹 Raw</h3>
             <code class="upload-columns">기간, 캠페인 이름, 광고 그룹 이름, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
             <a class="upload-template-link" data-template="adgroup" download="gfa_adgroup_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="adgroup">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
             <p class="upload-status" hidden></p>
           </div>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">ADV Raw</h3>
             <code class="upload-columns">기간, 상품명, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
             <a class="upload-template-link" data-template="adv" download="gfa_adv_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="adv">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
             <p class="upload-status" hidden></p>
           </div>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">소재 Raw</h3>
             <code class="upload-columns">기간, 소재 이름, 노출수, 클릭수, 총비용, 구매완료 수, 구매완료 전환매출액</code>
             <a class="upload-template-link" data-template="creative" download="gfa_creative_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="creative">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
@@ -436,44 +452,60 @@
 
         <div class="upload-grid channel-upload-grid" data-channel="SA" hidden>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">캠페인 Raw</h3>
             <code class="upload-columns">기간, 캠페인 유형(파워링크/쇼핑검색/브랜드검색), 캠페인 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
             <a class="upload-template-link" data-template="sa_campaign" download="sa_campaign_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="sa_campaign">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
             <p class="upload-status" hidden></p>
           </div>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">그룹 Raw</h3>
             <code class="upload-columns">기간, 캠페인 유형(파워링크/쇼핑검색/브랜드검색), 광고그룹 이름, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
             <a class="upload-template-link" data-template="sa_adgroup" download="sa_adgroup_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="sa_adgroup">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
             <p class="upload-status" hidden></p>
           </div>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">키워드 Raw</h3>
             <code class="upload-columns">기간, 캠페인 유형(파워링크/쇼핑검색/브랜드검색), 검색어(키워드), 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
             <a class="upload-template-link" data-template="sa_keyword" download="sa_keyword_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="sa_keyword">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>
             <p class="upload-status" hidden></p>
           </div>
 
-          <div class="upload-card">
+          <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">상품 Raw (쇼핑검색 전용)</h3>
             <code class="upload-columns">기간, 상품명, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
             <a class="upload-template-link" data-template="sa_product" download="sa_product_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="sa_product">
+              <label class="upload-date-label">
+                날짜(기간) 컬럼이 없는 파일이면 직접 선택
+                <input type="date" class="upload-date-input">
+              </label>
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>

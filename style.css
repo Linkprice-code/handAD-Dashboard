@@ -876,6 +876,17 @@ button, input, select {
   padding: 20px 22px;
 }
 
+/* 카드 전체를 드롭존으로 쓴다 - 파일을 마우스로 끌어다 놓으면 드래그 중임을
+   테두리 색으로 알려주고, 놓으면 안에 있는 파일 입력에 그대로 반영된다. */
+.upload-dropzone {
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.upload-dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(37, 99, 235, 0.05);
+}
+
 .upload-card-title {
   font-size: 14.5px;
   font-weight: 700;
@@ -942,6 +953,24 @@ button, input, select {
   min-width: 200px;
   font-size: 13px;
   color: var(--text-main);
+}
+
+.upload-date-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  width: 100%;
+}
+
+.upload-date-input {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--text-main);
+  background: #f9fafc;
 }
 
 .contract-input {

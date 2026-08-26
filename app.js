@@ -1725,21 +1725,24 @@ function escapeHtml(str) {
    그중 하나라도 찾아서 매칭한다. 우리가 만든 템플릿(date, campaign, ...
    영문 헤더)도 계속 지원한다.
 --------------------------------------------------------- */
+// date는 이 목록에 넣지 않는다 - 아래 parseGfaCsv가 항상 별도로 찾고, CSV에 없으면
+// 업로드 폼의 날짜 입력값으로 대신 채운다(네이버 리포트 중에 기간별로 안 나눠서
+// 합계만 주는 파일은 "기간" 컬럼 자체가 없는 경우가 있다 - 실제 파일로 확인, 2026-08-26).
 const GFA_RAW_TYPE_COLUMNS = {
-  campaign: ["date", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
-  adgroup: ["date", "campaign", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
-  adv: ["date", "product", "impressions", "clicks", "cost", "conversions", "revenue"],
-  creative: ["date", "creative", "impressions", "clicks", "cost", "conversions", "revenue"],
+  campaign: ["campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
+  adgroup: ["campaign", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
+  adv: ["product", "impressions", "clicks", "cost", "conversions", "revenue"],
+  creative: ["creative", "impressions", "clicks", "cost", "conversions", "revenue"],
   // SA 수기 업로드 - GFA와 동일하게 캠페인/그룹/키워드/상품 Raw 4종이다. 파워링크/쇼핑검색/
   // 브랜드검색은 raw_type(=어느 카드에 올렸는지)이 아니라 CSV 안의 campaign_type(캠페인 유형)
   // 컬럼으로 구분하므로, 한 파일에 여러 유형이 섞여 있어도 된다. 네이버 SA_Daily Overview
   // 리포트는 그룹/키워드(검색어) 단위로 내려받으면 캠페인 이름 컬럼 자체가 없다(실제 파일로
   // 확인, 2026-08-21) - 그래서 campaign은 캠페인 Raw에서만 필수이고 그룹/키워드 Raw에서는
   // 선택 컬럼이다.
-  sa_campaign: ["date", "campaign_type", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_adgroup: ["date", "campaign_type", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_keyword: ["date", "campaign_type", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_product: ["date", "product", "impressions", "clicks", "cost", "conversions", "revenue"]
+  sa_campaign: ["campaign_type", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_adgroup: ["campaign_type", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_keyword: ["campaign_type", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
+  sa_product: ["product", "impressions", "clicks", "cost", "conversions", "revenue"]
 };
 
 // requiredColumns와 달리, CSV에 없어도 업로드 자체는 막지 않는 추가 컬럼
@@ -1942,7 +1945,10 @@ function findHeaderRow(lines, requiredColumns) {
   throw new Error(`CSV에서 다음 컬럼을 찾지 못했습니다: ${firstAttemptMissing.join(", ")}`);
 }
 
-function parseGfaCsv(text, requiredColumns, optionalColumns = []) {
+// manualDate: "YYYY-MM-DD" - CSV에 날짜(기간) 컬럼이 아예 없는 파일(기간별로 안 나눈
+// 합계 리포트 등)일 때, 업로드 폼에서 직접 고른 날짜로 모든 행을 채운다. CSV에 날짜
+// 컬럼이 있으면 그 값이 우선이고, manualDate는 무시된다.
+function parseGfaCsv(text, requiredColumns, optionalColumns = [], manualDate = null) {
   const lines = text.split(/\r\n|\n|\r/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) {
     throw new Error("업로드할 데이터가 없습니다 (헤더 다음 줄부터 데이터가 있어야 합니다).");
@@ -1950,19 +1956,34 @@ function parseGfaCsv(text, requiredColumns, optionalColumns = []) {
 
   const { rowIndex: headerRowIndex, header, columnIndex } = findHeaderRow(lines, requiredColumns);
 
+  // date는 requiredColumns에 없지만 항상 따로 찾아본다 - CSV에 있으면 그 컬럼을 쓰고,
+  // 없으면 manualDate로 대신한다(둘 다 없으면 오류).
+  const dateIdx = findColumnIndex(header, GFA_HEADER_ALIASES.date);
+  if (dateIdx !== -1) {
+    columnIndex.date = dateIdx;
+  } else if (!manualDate) {
+    throw new Error(
+      "이 CSV에는 날짜(기간) 컬럼이 없습니다. 파일 선택 위에서 날짜를 직접 골라주세요."
+    );
+  }
+
   // optionalColumns는 없어도 업로드를 막지 않는다 - 있으면 같이 담고, 없으면 그냥 건너뛴다.
   optionalColumns.forEach((field) => {
     const idx = findColumnIndex(header, GFA_HEADER_ALIASES[field] || [field]);
     if (idx !== -1) columnIndex[field] = idx;
   });
 
-  const allFields = [...requiredColumns, ...optionalColumns];
+  const allFields = ["date", ...requiredColumns, ...optionalColumns];
 
   return lines.slice(headerRowIndex + 1).map((line) => {
     const cells = splitCsvLine(line);
     const row = {};
 
     allFields.forEach((field) => {
+      if (field === "date" && !(field in columnIndex)) {
+        row.date = manualDate;
+        return;
+      }
       if (!(field in columnIndex)) return; // optional인데 이 CSV엔 없는 컬럼
 
       const cellValue = (cells[columnIndex[field]] ?? "").trim();
@@ -1979,10 +2000,11 @@ function parseGfaCsv(text, requiredColumns, optionalColumns = []) {
   });
 }
 
-// 캠페인 / 그룹 / ADV 3개 업로드 폼에 공통 로직을 붙인다.
+// GFA/SA 업로드 폼 전부(8개)에 공통 로직을 붙인다.
 document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
   const rawType = form.dataset.rawType;
   const fileInput = form.querySelector(".upload-file-input");
+  const dateInput = form.querySelector(".upload-date-input");
   const statusEl = form.closest(".upload-card").querySelector(".upload-status");
   const submitBtn = form.querySelector("button[type=submit]");
 
@@ -1999,7 +2021,12 @@ document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
 
     try {
       const text = await readCsvFileAsText(file);
-      const rows = parseGfaCsv(text, GFA_RAW_TYPE_COLUMNS[rawType], GFA_OPTIONAL_COLUMNS[rawType] || []);
+      const rows = parseGfaCsv(
+        text,
+        GFA_RAW_TYPE_COLUMNS[rawType],
+        GFA_OPTIONAL_COLUMNS[rawType] || [],
+        dateInput.value || null
+      );
 
       // SA 캠페인/그룹/키워드 Raw는 campaign_type 셀 값(파워링크/쇼핑검색/브랜드검색 등)을
       // 서버가 쓰는 코드(WEB_SITE/SHOPPING/BRAND_SEARCH)로 미리 정규화해서, 잘못된 값이면
@@ -2040,6 +2067,33 @@ document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = originalLabel;
+    }
+  });
+});
+
+// 업로드 카드 전체를 드롭존으로 써서, 파일을 마우스로 끌어다 놓으면 그 카드 안의
+// 파일 입력에 그대로 반영되게 한다 ("파일 선택" 버튼을 꼭 누르지 않아도 되게).
+document.querySelectorAll(".upload-dropzone").forEach((zone) => {
+  const fileInput = zone.querySelector(".upload-file-input");
+  if (!fileInput) return;
+
+  ["dragenter", "dragover"].forEach((evt) => {
+    zone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      zone.classList.add("drag-over");
+    });
+  });
+
+  ["dragleave", "drop"].forEach((evt) => {
+    zone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      zone.classList.remove("drag-over");
+    });
+  });
+
+  zone.addEventListener("drop", (e) => {
+    if (e.dataTransfer.files.length > 0) {
+      fileInput.files = e.dataTransfer.files;
     }
   });
 });
