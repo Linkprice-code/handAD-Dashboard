@@ -109,18 +109,22 @@ async function verifySessionToken(token: string): Promise<SessionPayload> {
    raw_type별 설정 - 테이블명/텍스트 컬럼은 여기 허용 목록에서만 고른다
    (사용자 입력을 테이블명 등 식별자로 직접 쓰지 않는다)
 --------------------------------------------------------- */
-// dedupeFields: 재업로드 시 "그 날짜의 기존 데이터를 지우고 새로 넣는다"의 기준을
-// date 하나에서 date + 이 필드들 조합으로 넓힌다. ADV Raw는 광고주가 상품(캠페인)
-// 그룹별로 리포트를 따로 받아서, 같은 기간을 다루는 파일을 여러 개 나눠 올리는
-// 경우가 있다 - date만 기준으로 지우면 나중에 올린 파일이 먼저 올린 파일의 다른
-// 상품 데이터까지 지워버리므로, product까지 같이 봐서 서로 안 지우게 한다.
+// appendOnly: 그 raw_type은 업로드할 때 기존 데이터를 지우지 않고 그냥 추가만 한다.
+// ADV Raw는 광고주가 상품(캠페인)군별로 리포트를 나눠서 여러 파일로 올리는 경우가
+// 있는데, gfa_adv_raw는 애초에 (날짜, 상품) 조합으로 여러 행이 있어도 조회 시점에
+// 상품 기준으로 합산하도록 설계되어 있다(gfa-performance 참고). 그래서 "날짜 기준
+// 삭제 후 삽입"을 하면 나중에 올린 파일이 먼저 올린 파일의 다른 캠페인 몫을 지워버리게
+// 되고, "날짜+상품 기준 삭제"로 좁혀도 같은 상품을 다른 캠페인으로 겹쳐 올린 파일끼리
+// 서로 지워버리는 문제가 남는다 - 그래서 ADV Raw는 아예 삭제 없이 추가만 하고, 여러
+// 파일의 값이 조회 시점에 자연스럽게 합산되게 한다. (같은 파일을 실수로 두 번 올리면
+// 중복 집계될 수 있음 - 광고주가 감수하기로 한 트레이드오프.)
 const RAW_TYPE_CONFIG: Record<
   string,
-  { table: string; textFields: string[]; optionalTextFields?: string[]; dedupeFields?: string[] }
+  { table: string; textFields: string[]; optionalTextFields?: string[]; appendOnly?: boolean }
 > = {
   campaign: { table: "gfa_campaign_raw", textFields: ["campaign"], optionalTextFields: ["campaign_type"] },
   adgroup: { table: "gfa_adgroup_raw", textFields: ["campaign", "ad_group"] },
-  adv: { table: "gfa_adv_raw", textFields: ["product"], dedupeFields: ["product"] },
+  adv: { table: "gfa_adv_raw", textFields: ["product"], appendOnly: true },
   creative: { table: "gfa_creative_raw", textFields: ["creative"] },
   // SA API 연동이 없는 광고주(naver_api_customer_id 없음, 예: 쉬어)용 수기 업로드.
   // sa-sync 자동 동기화 테이블(sa_campaign_daily 등)과는 완전히 별도 테이블이라
@@ -274,33 +278,10 @@ Deno.serve(async (req: Request) => {
 
   const uniqueDates = [...new Set(cleanRows.map((r) => r.date as string))];
 
-  // 같은 raw_type + 날짜(+ dedupeFields)를 다시 업로드해도 중복 누적되지 않도록,
-  // 그 조합의 기존 데이터를 먼저 지우고 새로 넣는다.
-  if (config.dedupeFields && config.dedupeFields.length > 0) {
-    const dedupeFields = config.dedupeFields;
-    const seenKeys = new Set<string>();
-
-    for (const row of cleanRows) {
-      const key = [row.date, ...dedupeFields.map((f) => row[f])].join("|||");
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-
-      let deleteQuery = supabase
-        .from(config.table)
-        .delete()
-        .eq("advertiser_id", session.advertiser_id)
-        .eq("date", row.date as string);
-      for (const field of dedupeFields) {
-        deleteQuery = deleteQuery.eq(field, row[field] as string);
-      }
-
-      const { error: deleteError } = await deleteQuery;
-      if (deleteError) {
-        console.error("gfa-upload delete error:", deleteError.message);
-        return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
-      }
-    }
-  } else {
+  // 같은 raw_type + 날짜를 다시 업로드해도 중복 누적되지 않도록, 그 날짜의 기존
+  // 데이터를 먼저 지우고 새로 넣는다. appendOnly인 raw_type(ADV Raw)은 지우지 않고
+  // 그냥 추가만 한다 - 이유는 위 RAW_TYPE_CONFIG 주석 참고.
+  if (!config.appendOnly) {
     const { error: deleteError } = await supabase
       .from(config.table)
       .delete()
