@@ -468,32 +468,28 @@ function formatPeriodRange(period) {
   return `${period.from.replace(/-/g, ".")} ~ ${period.to.replace(/-/g, ".")}`;
 }
 
-// --- 주별(월 기준 N주차, 월~일) / 월별 선택 -> 실제 from~to 날짜로 변환 ---
-// ISO 8601 주차 대신, "그 달 안에서 몇 번째 월~일 구간인가"로 주차를 나눈다.
-// 예: 8월 1일이 토요일이면 8/1~8/2(2일뿐)가 1주차, 8/3(월)~8/9가 2주차.
+// --- 주별(월~일 7일 고정) / 월별 선택 -> 실제 from~to 날짜로 변환 ---
+// "n월 n주차"처럼 월 경계에서 잘린(예: 5~6일짜리) 짧은 주가 생기지 않도록, 항상
+// 월요일~일요일 7일 단위로만 나눈다. 그 달의 1일이 속한 주(월요일 시작)부터 그
+// 달 마지막 날이 속한 주까지 훑으므로, 앞뒤로 다른 달 날짜가 며칠 섞일 수 있다 -
+// 그래서 "n주차" 순번 대신 실제 날짜 범위를 라벨로 보여준다.
 function computeMonthWeeks(year, month) {
   const first = new Date(year, month - 1, 1);
   const last = new Date(year, month, 0);
   const weeks = [];
-  let cursor = new Date(first);
-  let weekNum = 1;
+
+  const cursor = new Date(first);
+  const daysSinceMonday = (cursor.getDay() + 6) % 7; // 0=월요일 ~ 6=일요일
+  cursor.setDate(cursor.getDate() - daysSinceMonday);
 
   while (cursor <= last) {
-    const dow = cursor.getDay(); // 0=일 ~ 6=토
-    const chunkEnd = new Date(cursor);
-    if (dow === 1) {
-      chunkEnd.setDate(chunkEnd.getDate() + 6); // 월요일 시작 -> 그 주 일요일까지
-    } else {
-      const daysUntilMonday = (8 - dow) % 7; // 다음 월요일 전날까지
-      chunkEnd.setDate(chunkEnd.getDate() + Math.max(daysUntilMonday - 1, 0));
-    }
-    if (chunkEnd > last) chunkEnd.setTime(last.getTime());
+    const weekEnd = new Date(cursor);
+    weekEnd.setDate(weekEnd.getDate() + 6);
 
-    weeks.push({ label: `${month}월 ${weekNum}주차`, from: toISODate(cursor), to: toISODate(chunkEnd) });
+    const label = `${cursor.getMonth() + 1}/${cursor.getDate()} ~ ${weekEnd.getMonth() + 1}/${weekEnd.getDate()}`;
+    weeks.push({ label, from: toISODate(cursor), to: toISODate(weekEnd) });
 
-    cursor = new Date(chunkEnd);
-    cursor.setDate(cursor.getDate() + 1);
-    weekNum += 1;
+    cursor.setDate(cursor.getDate() + 7);
   }
 
   return weeks;
