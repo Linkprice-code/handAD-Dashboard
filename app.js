@@ -54,7 +54,7 @@ const GFA_RAW_TYPE_NAME_LABEL = {
 };
 
 // GFA 캠페인 유형별 성과 표에 고정으로 보여줄 유형 순서 (네이버 GFA "캠페인 목적" 값)
-const GFA_CAMPAIGN_TYPE_ORDER = ["웹사이트 전환", "인지도 및 트래픽", "쇼핑 프로모션", "카탈로그 판매", "동영상 조회"];
+const GFA_CAMPAIGN_TYPE_ORDER = ["웹사이트 전환", "인지도 및 트래픽", "쇼핑 프로모션", "카탈로그 판매", "동영상 조회", "ADVoost 쇼핑"];
 
 /* ---------------------------------------------------------
    3. 채널(SA / GFA) 라벨
@@ -943,15 +943,21 @@ function sumRawTotals(rows) {
   return totals;
 }
 
+// GFA 핵심지표(KPI 카드)와 "캠페인 유형별 성과"는 캠페인 Raw(gfa_campaign_raw)뿐 아니라
+// ADVoost 쇼핑(gfa_adv_raw)까지 합산해서 보여준다 - ADVoost는 캠페인 목적(campaign_type)
+// 컬럼이 아예 없는 별도 상품이라 원래 캠페인 Raw 집계에는 안 잡히기 때문에, 여기서
+// "ADVoost 쇼핑"이라는 이름의 유형 하나로 직접 합쳐 넣는다.
 async function renderGfaOverview() {
   const token = ++state.overviewRenderToken;
   const { from, to } = state.analysisPeriod;
   const { from: compareFrom, to: compareTo } = state.comparisonPeriod;
 
-  const [currentResult, comparisonResult, campaignTypeResult] = await Promise.all([
+  const [currentResult, comparisonResult, campaignTypeResult, advCurrentResult, advComparisonResult] = await Promise.all([
     fetchGfaPerformance("campaign", { dateFrom: from, dateTo: to }),
     fetchGfaPerformance("campaign", { dateFrom: compareFrom, dateTo: compareTo }),
-    fetchGfaPerformance("campaign_type", { dateFrom: from, dateTo: to })
+    fetchGfaPerformance("campaign_type", { dateFrom: from, dateTo: to }),
+    fetchGfaPerformance("adv", { dateFrom: from, dateTo: to }),
+    fetchGfaPerformance("adv", { dateFrom: compareFrom, dateTo: compareTo })
   ]);
 
   if (token !== state.overviewRenderToken) return; // 그 사이 다른 요청으로 대체됨
@@ -966,9 +972,14 @@ async function renderGfaOverview() {
     return;
   }
 
-  const currentTotals = sumRawTotals(currentResult.rows);
-  const comparisonTotals = comparisonResult.success ? sumRawTotals(comparisonResult.rows) : null;
-  const hasData = currentResult.rows.length > 0;
+  const advCurrentTotals = advCurrentResult.success ? sumRawTotals(advCurrentResult.rows) : null;
+  const advComparisonTotals = advComparisonResult.success ? sumRawTotals(advComparisonResult.rows) : null;
+
+  const currentTotals = addRawTotals(sumRawTotals(currentResult.rows), advCurrentTotals);
+  const comparisonTotals = comparisonResult.success
+    ? addRawTotals(sumRawTotals(comparisonResult.rows), advComparisonTotals)
+    : null;
+  const hasData = currentResult.rows.length > 0 || (advCurrentTotals && advCurrentTotals.impressions > 0);
 
   overviewEmptyNotice.hidden = hasData;
   if (!hasData) {
@@ -981,16 +992,34 @@ async function renderGfaOverview() {
     comparisonTotals ? withDerivedMetrics(comparisonTotals) : null
   );
 
-  renderGfaCampaignTypeRows(campaignTypeResult.success ? campaignTypeResult.rows : []);
+  const campaignTypeRows = campaignTypeResult.success ? [...campaignTypeResult.rows] : [];
+  if (advCurrentTotals) {
+    campaignTypeRows.push({ name: "ADVoost 쇼핑", ...withDerivedMetrics(advCurrentTotals) });
+  }
+  renderGfaCampaignTypeRows(campaignTypeRows);
 
   await loadBreakdownData();
 }
 
+function addRawTotals(a, b) {
+  if (!b) return a;
+  return {
+    impressions: a.impressions + b.impressions,
+    clicks: a.clicks + b.clicks,
+    cost: a.cost + b.cost,
+    conversions: a.conversions + b.conversions,
+    revenue: a.revenue + b.revenue
+  };
+}
+
 /* ---------------------------------------------------------
-   6-2a. GFA 캠페인 유형별 성과 (웹사이트 전환 / 인지도 및 트래픽 / 쇼핑 프로모션 / 카탈로그 판매 / 동영상 조회)
+   6-2a. GFA 캠페인 유형별 성과 (웹사이트 전환 / 인지도 및 트래픽 / 쇼핑 프로모션 / 카탈로그
+   판매 / 동영상 조회 / ADVoost 쇼핑)
    ---------------------------------------------------------
    캠페인 Raw 업로드 시 "캠페인 목적" 컬럼에서 뽑아 저장해둔 campaign_type 기준으로,
-   고정된 유형 5개는 항상 순서대로 보여주고 그 외 값(또는 비어있는 값)은 "기타"로 묶는다.
+   고정된 유형(ADVoost 쇼핑 포함 6개)은 항상 순서대로 보여주고 그 외 값(또는 비어있는
+   값)은 "기타"로 묶는다. ADVoost 쇼핑은 campaign_type 컬럼이 없는 별도 raw 테이블
+   (gfa_adv_raw)이라, renderGfaOverview에서 합산해 이 이름으로 끼워 넣는다.
 --------------------------------------------------------- */
 function renderGfaCampaignTypeRows(rows) {
   const byName = new Map(rows.map((r) => [r.name, r]));
