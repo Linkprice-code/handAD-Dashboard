@@ -2,7 +2,7 @@
 // 헤더: Authorization: Bearer <anon key>  (Supabase 게이트웨이 JWT 검증용, 필수)
 //       apikey: <anon key>
 //       X-Session-Token: <advertiser-login이 발급한 세션 토큰>  (실제 광고주 식별용)
-// body: { raw_type: "campaign" | "adgroup" | "adv" | "creative", rows: [...] }
+// body: { raw_type: "campaign" | "adgroup" | "adv" | "creative" | "sa_campaign" | "sa_keyword" | "sa_product", rows: [...] }
 //
 // GFA는 네이버에서 캠페인별 / 광고그룹별 / 상품(ADVoost)별 / 소재별 리포트를 각각
 // 따로 주기 때문에, raw_type에 따라 서로 다른 테이블에 저장한다:
@@ -12,6 +12,11 @@
 //   creative -> gfa_creative_raw   (date, creative, ...)
 // campaign_type은 네이버 캠페인 Raw의 "캠페인 목적" 컬럼(웹사이트 전환/쇼핑 프로모션 등)
 // 이고, 없어도(구버전 CSV 등) 업로드는 계속 된다.
+//
+// sa_campaign / sa_keyword / sa_product는 네이버 SA API 연동이 없는 광고주
+// (naver_api_customer_id가 없음, 예: 쉬어)용 수기 업로드다. sa-sync가 자동으로
+// 채우는 sa_campaign_daily 등과는 완전히 별도 테이블(sa_campaign_raw 등)에 저장되어
+// 서로 덮어쓰지 않는다.
 // advertiser_id는 절대 body에서 받지 않고, X-Session-Token을 서버에서 검증해서
 // 나온 값만 사용한다.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -20,7 +25,9 @@ const ALLOWED_ORIGINS = [
   "https://wjdauddba998-code.github.io",
   "https://linkprice-dashboard.netlify.app",
   // handAD-Dashboard(SA 수기 업로드 사이트) - GFA 업로드는 그대로 재사용한다.
-  "https://ad-dashboard-hand.netlify.app",
+  // 원래 GitHub 계정도 wjdauddba998-code -> linkprice-code로 이름이 바뀌어서
+  // 이 도메인 하나로 AD-Dashboard/handAD-Dashboard 둘 다 커버된다.
+  "https://linkprice-code.github.io",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
 ];
@@ -102,11 +109,26 @@ async function verifySessionToken(token: string): Promise<SessionPayload> {
    raw_type별 설정 - 테이블명/텍스트 컬럼은 여기 허용 목록에서만 고른다
    (사용자 입력을 테이블명 등 식별자로 직접 쓰지 않는다)
 --------------------------------------------------------- */
-const RAW_TYPE_CONFIG: Record<string, { table: string; textFields: string[]; optionalTextFields?: string[] }> = {
+// dedupeFields: 재업로드 시 "그 날짜의 기존 데이터를 지우고 새로 넣는다"의 기준을
+// date 하나에서 date + 이 필드들 조합으로 넓힌다. ADV Raw는 광고주가 상품(캠페인)
+// 그룹별로 리포트를 따로 받아서, 같은 기간을 다루는 파일을 여러 개 나눠 올리는
+// 경우가 있다 - date만 기준으로 지우면 나중에 올린 파일이 먼저 올린 파일의 다른
+// 상품 데이터까지 지워버리므로, product까지 같이 봐서 서로 안 지우게 한다.
+const RAW_TYPE_CONFIG: Record<
+  string,
+  { table: string; textFields: string[]; optionalTextFields?: string[]; dedupeFields?: string[] }
+> = {
   campaign: { table: "gfa_campaign_raw", textFields: ["campaign"], optionalTextFields: ["campaign_type"] },
   adgroup: { table: "gfa_adgroup_raw", textFields: ["campaign", "ad_group"] },
-  adv: { table: "gfa_adv_raw", textFields: ["product"] },
+  adv: { table: "gfa_adv_raw", textFields: ["product"], dedupeFields: ["product"] },
   creative: { table: "gfa_creative_raw", textFields: ["creative"] },
+  // SA API 연동이 없는 광고주(naver_api_customer_id 없음, 예: 쉬어)용 수기 업로드.
+  // sa-sync 자동 동기화 테이블(sa_campaign_daily 등)과는 완전히 별도 테이블이라
+  // 서로 덮어쓰지 않는다. 네이버가 실제로 주는 리포트는 "캠페인" 컬럼이 없는
+  // 경우(검색어/키워드 보고서)가 있어서 campaign을 optional로 둔다.
+  sa_campaign: { table: "sa_campaign_raw", textFields: ["campaign_type", "campaign"] },
+  sa_keyword: { table: "sa_keyword_raw", textFields: ["campaign_type", "keyword"], optionalTextFields: ["campaign", "ad_group"] },
+  sa_product: { table: "sa_product_raw", textFields: ["product"], optionalTextFields: ["naver_ad_id"] },
 };
 
 const MAX_ROWS = 20000;
@@ -252,17 +274,43 @@ Deno.serve(async (req: Request) => {
 
   const uniqueDates = [...new Set(cleanRows.map((r) => r.date as string))];
 
-  // 같은 raw_type + 날짜를 다시 업로드해도 중복 누적되지 않도록,
-  // 그 날짜의 기존 데이터를 먼저 지우고 새로 넣는다.
-  const { error: deleteError } = await supabase
-    .from(config.table)
-    .delete()
-    .eq("advertiser_id", session.advertiser_id)
-    .in("date", uniqueDates);
+  // 같은 raw_type + 날짜(+ dedupeFields)를 다시 업로드해도 중복 누적되지 않도록,
+  // 그 조합의 기존 데이터를 먼저 지우고 새로 넣는다.
+  if (config.dedupeFields && config.dedupeFields.length > 0) {
+    const dedupeFields = config.dedupeFields;
+    const seenKeys = new Set<string>();
 
-  if (deleteError) {
-    console.error("gfa-upload delete error:", deleteError.message);
-    return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+    for (const row of cleanRows) {
+      const key = [row.date, ...dedupeFields.map((f) => row[f])].join("|||");
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      let deleteQuery = supabase
+        .from(config.table)
+        .delete()
+        .eq("advertiser_id", session.advertiser_id)
+        .eq("date", row.date as string);
+      for (const field of dedupeFields) {
+        deleteQuery = deleteQuery.eq(field, row[field] as string);
+      }
+
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) {
+        console.error("gfa-upload delete error:", deleteError.message);
+        return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+      }
+    }
+  } else {
+    const { error: deleteError } = await supabase
+      .from(config.table)
+      .delete()
+      .eq("advertiser_id", session.advertiser_id)
+      .in("date", uniqueDates);
+
+    if (deleteError) {
+      console.error("gfa-upload delete error:", deleteError.message);
+      return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+    }
   }
 
   const insertRows = cleanRows.map((r) => ({
