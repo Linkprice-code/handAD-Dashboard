@@ -612,61 +612,117 @@ logoutBtn.addEventListener("click", () => {
 --------------------------------------------------------- */
 pdfExportBtn.addEventListener("click", exportCurrentViewToPdf);
 
-async function exportCurrentViewToPdf() {
-  const target = document.querySelector("#content .view:not([hidden])");
-  if (!target) return;
+// jsPDF 내장 폰트(Helvetica 등)는 한글 글리프가 없어서 pdf.text()로 직접 그리면
+// 깨진 문자가 나온다. 그래서 헤더도 본문처럼 html2canvas로 화면 그대로 캡처해서
+// 이미지로 넣는다 (브라우저가 렌더링하므로 한글이 정상적으로 나온다).
+function buildPdfHeaderElement(titleText, subtitleText) {
+  const el = document.createElement("div");
+  el.style.cssText =
+    "position:fixed; left:-9999px; top:0; width:900px; padding:0; " +
+    "background:#f3f5f9; font-family:'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;";
+  el.innerHTML =
+    `<div style="font-size:22px; font-weight:700; color:#1a1f2b; margin-bottom:8px;">${escapeHtml(titleText)}</div>` +
+    `<div style="font-size:14px; color:#5a6275;">${escapeHtml(subtitleText)}</div>`;
+  document.body.appendChild(el);
+  return el;
+}
 
+async function captureElementAsCanvas(el) {
+  return html2canvas(el, { scale: 2, backgroundColor: "#f3f5f9", useCORS: true });
+}
+
+// pdf에 [헤더 이미지 + target 캡처 이미지]를 한 구역으로 추가한다. 내용이 한
+// 페이지보다 길면 이어서 새 페이지를 계속 만든다. isFirstSection이 false면
+// 이 구역 자체를 새 페이지에서 시작한다(SA/GFA를 각각 별도 페이지로 나눌 때 사용).
+async function addPdfSection(pdf, target, titleText, subtitleText, isFirstSection) {
+  const headerEl = buildPdfHeaderElement(titleText, subtitleText);
+  const headerCanvas = await captureElementAsCanvas(headerEl);
+  document.body.removeChild(headerEl);
+
+  const contentCanvas = await captureElementAsCanvas(target);
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 28;
+  const imgWidth = pageWidth - margin * 2;
+
+  if (!isFirstSection) pdf.addPage();
+
+  const headerImgHeight = (headerCanvas.height * imgWidth) / headerCanvas.width;
+  pdf.addImage(headerCanvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, headerImgHeight);
+
+  const contentImgHeight = (contentCanvas.height * imgWidth) / contentCanvas.width;
+  const contentImgData = contentCanvas.toDataURL("image/png");
+  let position = margin + headerImgHeight + 16;
+  pdf.addImage(contentImgData, "PNG", margin, position, imgWidth, contentImgHeight);
+
+  let heightLeft = contentImgHeight - (pageHeight - position);
+  while (heightLeft > 0) {
+    pdf.addPage();
+    position = -(contentImgHeight - heightLeft);
+    pdf.addImage(contentImgData, "PNG", margin, position, imgWidth, contentImgHeight);
+    heightLeft -= pageHeight;
+  }
+}
+
+async function exportCurrentViewToPdf() {
   const originalLabel = pdfExportBtn.textContent;
   pdfExportBtn.disabled = true;
   pdfExportBtn.textContent = "생성 중...";
 
-  try {
-    const canvas = await html2canvas(target, {
-      scale: 2,
-      backgroundColor: "#f3f5f9",
-      useCORS: true,
-    });
+  const savedChannel = state.currentChannel;
+  const advertiserName = advertiserNameEl.textContent || "";
 
+  try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p", "pt", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 28;
-
     const viewLabel = (MENU_ITEMS.find((m) => m.id === state.currentView) || {}).label || "";
+    let fileLabel = viewLabel;
 
-    // 헤더(광고주명 / 메뉴 / 분석기간)는 캡처 이미지가 아니라 텍스트로 직접 그려서 흐려지지 않게 한다.
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(14);
-    pdf.text(advertiserNameEl.textContent || "", margin, margin + 12);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.setTextColor(90, 98, 117);
-    pdf.text(`${viewLabel} · ${periodLabel.textContent || ""}`, margin, margin + 28);
-    pdf.setTextColor(0, 0, 0);
-
-    const imgWidth = pageWidth - margin * 2;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const imgData = canvas.toDataURL("image/png");
-
-    let position = margin + 44;
-    pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-
-    let heightLeft = imgHeight - (pageHeight - position);
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = -(imgHeight - heightLeft);
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+    if (state.currentView === "overview") {
+      // "성과 대시보드"는 지금 보고 있는 채널과 상관없이 SA를 먼저, GFA를 그 다음
+      // 페이지로 항상 같이 뽑는다 (SA/GFA를 한 리포트로 같이 보고 싶어함).
+      fileLabel = "성과대시보드";
+      const channels = ["SA", "GFA"];
+      for (let i = 0; i < channels.length; i++) {
+        state.currentChannel = channels[i];
+        applyChannelVisibility();
+        await renderOverview();
+        const target = document.querySelector("#content .view:not([hidden])");
+        await addPdfSection(
+          pdf,
+          target,
+          advertiserName,
+          `${CHANNEL_LABELS[channels[i]]} 성과 대시보드 · ${periodLabel.textContent || ""}`,
+          i === 0
+        );
+      }
+    } else {
+      const target = document.querySelector("#content .view:not([hidden])");
+      if (!target) return;
+      await addPdfSection(pdf, target, advertiserName, `${viewLabel} · ${periodLabel.textContent || ""}`, true);
     }
 
-    const advertiserSlug = (advertiserNameEl.textContent || "advertiser").replace(/\s+/g, "_");
+    const advertiserSlug = (advertiserName || "advertiser").replace(/\s+/g, "_");
     const dateStr = new Date().toISOString().slice(0, 10);
-    pdf.save(`${advertiserSlug}_${viewLabel}_${dateStr}.pdf`);
+    pdf.save(`${advertiserSlug}_${fileLabel}_${dateStr}.pdf`);
   } catch (e) {
     console.error("[pdf export]", e);
     alert("PDF 생성 중 오류가 발생했습니다.");
   } finally {
+    // 내보내는 동안 화면이 채널별로 바뀌었을 수 있으니, 원래 보고 있던 채널로 되돌린다.
+    if (state.currentChannel !== savedChannel) {
+      state.currentChannel = savedChannel;
+      applyChannelVisibility();
+      channelSwitch.querySelectorAll(".channel-tab").forEach((btn) => {
+        const isActive = btn.dataset.channel === savedChannel;
+        btn.classList.toggle("active", isActive);
+        btn.setAttribute("aria-selected", String(isActive));
+      });
+      renderSidebarMenu();
+      renderCurrentView();
+    }
+
     pdfExportBtn.disabled = false;
     pdfExportBtn.textContent = originalLabel;
   }
