@@ -1854,7 +1854,13 @@ const GFA_RAW_TYPE_COLUMNS = {
   sa_campaign: ["campaign_type", "campaign", "impressions", "clicks", "cost", "conversions", "revenue"],
   sa_adgroup: ["campaign_type", "ad_group", "impressions", "clicks", "cost", "conversions", "revenue"],
   sa_keyword: ["campaign_type", "keyword", "impressions", "clicks", "cost", "conversions", "revenue"],
-  sa_product: ["product", "impressions", "clicks", "cost", "conversions", "revenue"]
+  // 네이버 SA 상품(쇼핑검색) 리포트는 상품명 컬럼이 없고 소재ID("소재")로만 내려온다
+  // (2026-08-28 실제 파일로 확인) - 상품명은 "상품 매칭 Raw"(sa_product_match)를 따로 올려서
+  // creative_id 기준으로 매칭한다.
+  sa_product: ["creative_id", "impressions", "clicks", "cost", "conversions", "revenue"],
+  // 상품 매칭 Raw - 소재ID <-> 상품명 매칭표. 날짜/지표가 없는 스냅샷 데이터라 매번 광고주
+  // 전체를 최신 상태로 덮어쓴다(GFA_RAW_TYPES_WITHOUT_DATE 참고).
+  sa_product_match: ["creative_id", "product"]
 };
 
 // requiredColumns와 달리, CSV에 없어도 업로드 자체는 막지 않는 추가 컬럼
@@ -1862,8 +1868,13 @@ const GFA_RAW_TYPE_COLUMNS = {
 //  ad_group은 SA 키워드 리포트에 광고그룹 컬럼이 없는 형태로 다운로드됐을 때를 대비한다).
 const GFA_OPTIONAL_COLUMNS = {
   sa_adgroup: ["campaign"],
-  sa_keyword: ["campaign", "ad_group"]
+  sa_keyword: ["campaign", "ad_group"],
+  sa_product_match: ["campaign", "ad_group", "category", "mall_product_id"]
 };
+
+// 날짜(기간) 컬럼 자체가 없는 raw_type - 스냅샷/매칭표라서 날짜별로 쌓지 않고
+// 업로드할 때마다 광고주 전체를 최신 상태로 덮어쓴다.
+const GFA_RAW_TYPES_WITHOUT_DATE = new Set(["sa_product_match"]);
 
 // 내부 필드명 -> 실제 CSV에 올 수 있는 헤더 이름 후보 (전부 소문자/trim 비교)
 // SA 헤더 후보 중 "일별"/"캠페인유형"/"캠페인"/"구매완료 전환수"/"구매완료 전환매출액(원)"은
@@ -1879,8 +1890,14 @@ const GFA_HEADER_ALIASES = {
   ad_group: ["ad_group", "광고 그룹 이름", "광고그룹 이름", "광고그룹명", "광고그룹"],
   // 네이버 SA_Daily Overview 리포트는 키워드 단위를 "검색어"라고 표기한다 (실제 파일로 확인).
   keyword: ["keyword", "키워드", "키워드 이름", "검색어"],
-  product: ["product", "상품명", "상품 이름"],
+  // "기본상품명"은 상품 매칭 Raw(소재ID<->상품명 매칭표)의 실제 헤더명이다 (2026-08-28 확인).
+  product: ["product", "상품명", "상품 이름", "기본상품명"],
   creative: ["creative", "소재 이름", "소재명", "소재"],
+  // SA 상품(쇼핑검색) 리포트의 "소재"/상품 매칭 Raw의 "소재 ID"는 이름이 아니라 식별자다 -
+  // 위 creative(소재 이름)와는 다른 필드라서 따로 둔다 (2026-08-28 실제 파일로 확인).
+  creative_id: ["creative_id", "소재 id", "소재"],
+  category: ["category", "카테고리"],
+  mall_product_id: ["mall_product_id", "쇼핑몰 상품id", "쇼핑몰상품id"],
   impressions: ["impressions", "노출수"],
   clicks: ["clicks", "클릭수"],
   cost: ["cost", "총비용", "비용"],
@@ -1945,8 +1962,11 @@ const GFA_RAW_TYPE_TEMPLATE_CSV = {
     "date,campaign_type,keyword,impressions,clicks,cost,conversions,revenue\n" +
     "2026-08-01,파워링크,여름원피스,15200,320,540000,18,3200000\n",
   sa_product:
-    "date,product,impressions,clicks,cost,conversions,revenue\n" +
-    "2026-08-01,여름원피스,15200,320,540000,18,3200000\n"
+    "date,creative_id,impressions,clicks,cost,conversions,revenue\n" +
+    "2026-08-01,nad-a001-01-000000436478207,15200,320,540000,18,3200000\n",
+  sa_product_match:
+    "creative_id,product,campaign,ad_group,category,mall_product_id\n" +
+    "nad-a001-01-000000436478207,여름원피스,여름신상_쇼핑검색,여름신상_쇼핑검색_그룹A,패션의류/원피스,12345678901\n"
 };
 
 // SA 키워드(검색어) Raw는 검색어 하나하나가 다 행이 되다 보니 4만 행을 넘는 파일도
@@ -2060,7 +2080,9 @@ function findHeaderRow(lines, requiredColumns) {
 // manualDate: "YYYY-MM-DD" - CSV에 날짜(기간) 컬럼이 아예 없는 파일(기간별로 안 나눈
 // 합계 리포트 등)일 때, 업로드 폼에서 직접 고른 날짜로 모든 행을 채운다. CSV에 날짜
 // 컬럼이 있으면 그 값이 우선이고, manualDate는 무시된다.
-function parseGfaCsv(text, requiredColumns, optionalColumns = [], manualDate = null) {
+// requireDate: false면 애초에 날짜 개념이 없는 스냅샷/매칭표(예: sa_product_match)라서
+// date 컬럼을 찾지도, manualDate를 요구하지도 않는다 (GFA_RAW_TYPES_WITHOUT_DATE 참고).
+function parseGfaCsv(text, requiredColumns, optionalColumns = [], manualDate = null, requireDate = true) {
   const lines = text.split(/\r\n|\n|\r/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) {
     throw new Error("업로드할 데이터가 없습니다 (헤더 다음 줄부터 데이터가 있어야 합니다).");
@@ -2068,15 +2090,17 @@ function parseGfaCsv(text, requiredColumns, optionalColumns = [], manualDate = n
 
   const { rowIndex: headerRowIndex, header, columnIndex } = findHeaderRow(lines, requiredColumns);
 
-  // date는 requiredColumns에 없지만 항상 따로 찾아본다 - CSV에 있으면 그 컬럼을 쓰고,
-  // 없으면 manualDate로 대신한다(둘 다 없으면 오류).
-  const dateIdx = findColumnIndex(header, GFA_HEADER_ALIASES.date);
-  if (dateIdx !== -1) {
-    columnIndex.date = dateIdx;
-  } else if (!manualDate) {
-    throw new Error(
-      "이 CSV에는 날짜(기간) 컬럼이 없습니다. 파일 선택 위에서 날짜를 직접 골라주세요."
-    );
+  if (requireDate) {
+    // date는 requiredColumns에 없지만 항상 따로 찾아본다 - CSV에 있으면 그 컬럼을 쓰고,
+    // 없으면 manualDate로 대신한다(둘 다 없으면 오류).
+    const dateIdx = findColumnIndex(header, GFA_HEADER_ALIASES.date);
+    if (dateIdx !== -1) {
+      columnIndex.date = dateIdx;
+    } else if (!manualDate) {
+      throw new Error(
+        "이 CSV에는 날짜(기간) 컬럼이 없습니다. 파일 선택 위에서 날짜를 직접 골라주세요."
+      );
+    }
   }
 
   // optionalColumns는 없어도 업로드를 막지 않는다 - 있으면 같이 담고, 없으면 그냥 건너뛴다.
@@ -2085,7 +2109,7 @@ function parseGfaCsv(text, requiredColumns, optionalColumns = [], manualDate = n
     if (idx !== -1) columnIndex[field] = idx;
   });
 
-  const allFields = ["date", ...requiredColumns, ...optionalColumns];
+  const allFields = requireDate ? ["date", ...requiredColumns, ...optionalColumns] : [...requiredColumns, ...optionalColumns];
 
   return lines.slice(headerRowIndex + 1).map((line) => {
     const cells = splitCsvLine(line);
@@ -2132,12 +2156,14 @@ document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
     submitBtn.textContent = "업로드 중...";
 
     try {
+      const requireDate = !GFA_RAW_TYPES_WITHOUT_DATE.has(rawType);
       const text = await readCsvFileAsText(file);
       const rows = parseGfaCsv(
         text,
         GFA_RAW_TYPE_COLUMNS[rawType],
         GFA_OPTIONAL_COLUMNS[rawType] || [],
-        dateInput.value || null
+        dateInput ? dateInput.value || null : null,
+        requireDate
       );
 
       // SA 캠페인/그룹/키워드 Raw는 campaign_type 셀 값(파워링크/쇼핑검색/브랜드검색 등)을
@@ -2170,7 +2196,9 @@ document.querySelectorAll("#view-upload .upload-form").forEach((form) => {
 
       showUploadStatus(
         statusEl,
-        `업로드 완료: ${result.inserted}건 저장 (${result.dates_replaced.length}개 날짜 갱신)`,
+        requireDate
+          ? `업로드 완료: ${result.inserted}건 저장 (${result.dates_replaced.length}개 날짜 갱신)`
+          : `업로드 완료: ${result.inserted}건 매칭 데이터로 전체 갱신됨`,
         "success"
       );
       form.reset();

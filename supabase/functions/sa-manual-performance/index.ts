@@ -110,11 +110,13 @@ const CAMPAIGN_TYPES = new Set(["WEB_SITE", "SHOPPING", "BRAND_SEARCH"]);
 /* ---------------------------------------------------------
    group_by별 설정(집계 모드) - 테이블/그룹기준 컬럼은 여기 허용 목록에서만 고른다
 --------------------------------------------------------- */
+// product는 sa_manual_product_raw(소재ID 단위 성과)를 sa_manual_product_match_raw(소재ID
+// <-> 상품명 매칭표)와 advertiser_id + creative_id로 조인해야 해서, 다른 group_by와 달리
+// 아래 AGGREGATE_CONFIG 제네릭 조회를 안 타고 따로 처리한다 (handleProductAggregate 참고).
 const AGGREGATE_CONFIG: Record<string, { table: string; nameField: string }> = {
   type: { table: "sa_manual_campaign_raw", nameField: "campaign_type" },
   campaign: { table: "sa_manual_campaign_raw", nameField: "campaign" },
   adgroup: { table: "sa_manual_adgroup_raw", nameField: "ad_group" },
-  product: { table: "sa_manual_product_raw", nameField: "product" },
 };
 
 Deno.serve(async (req: Request) => {
@@ -226,6 +228,75 @@ Deno.serve(async (req: Request) => {
         revenue: acc.revenue,
         ctr: acc.impressions > 0 ? Number(((acc.clicks / acc.impressions) * 100).toFixed(2)) : 0,
         cpc: acc.clicks > 0 ? Math.round(acc.cost / acc.clicks) : 0,
+        roas: acc.cost > 0 ? Math.round((acc.revenue / acc.cost) * 100) : 0,
+        cpa: acc.conversions > 0 ? Math.round(acc.cost / acc.conversions) : 0,
+      }))
+      .sort((a, b) => b.cost - a.cost);
+
+    return jsonResponse({ success: true, rows }, 200, headers);
+  }
+
+  // mode === "aggregate", group_by === "product": sa_manual_product_raw(소재ID 단위 성과)에는
+  // 상품명이 없어서, sa_manual_product_match_raw(소재ID<->상품명 매칭표)를 advertiser_id +
+  // creative_id로 조인해 상품명을 붙인 뒤 그 이름으로 묶는다. 매칭표에 없는 소재ID는
+  // "미매칭(소재ID)"로 표시한다(업로드 순서상 매칭 Raw를 아직 안 올렸을 수 있음).
+  if (typeof body.group_by === "string" && body.group_by === "product") {
+    const [matchResult, rawResult] = await Promise.all([
+      supabase
+        .from("sa_manual_product_match_raw")
+        .select("creative_id, product")
+        .eq("advertiser_id", session.advertiser_id),
+      (() => {
+        let q = supabase
+          .from("sa_manual_product_raw")
+          .select("creative_id, impressions, clicks, cost, conversions, revenue")
+          .eq("advertiser_id", session.advertiser_id);
+        if (dateFrom) q = q.gte("date", dateFrom);
+        if (dateTo) q = q.lte("date", dateTo);
+        return q;
+      })(),
+    ]);
+
+    if (matchResult.error || rawResult.error) {
+      console.error(
+        "sa-manual-performance product query error:",
+        matchResult.error?.message ?? rawResult.error?.message,
+      );
+      return jsonResponse({ success: false, message: "데이터를 불러오지 못했습니다." }, 500, headers);
+    }
+
+    const productNameByCreativeId = new Map<string, string>();
+    for (const row of (matchResult.data ?? []) as Record<string, unknown>[]) {
+      productNameByCreativeId.set(String(row.creative_id ?? ""), String(row.product ?? ""));
+    }
+
+    const groups = new Map<
+      string,
+      { impressions: number; clicks: number; cost: number; conversions: number; revenue: number }
+    >();
+
+    for (const row of (rawResult.data ?? []) as Record<string, unknown>[]) {
+      const creativeId = String(row.creative_id ?? "");
+      const name = productNameByCreativeId.get(creativeId) || `미매칭(${creativeId})`;
+      const acc = groups.get(name) ?? { impressions: 0, clicks: 0, cost: 0, conversions: 0, revenue: 0 };
+      acc.impressions += Number(row.impressions ?? 0);
+      acc.clicks += Number(row.clicks ?? 0);
+      acc.cost += Number(row.cost ?? 0);
+      acc.conversions += Number(row.conversions ?? 0);
+      acc.revenue += Number(row.revenue ?? 0);
+      groups.set(name, acc);
+    }
+
+    const rows = [...groups.entries()]
+      .map(([name, acc]) => ({
+        name,
+        impressions: acc.impressions,
+        clicks: acc.clicks,
+        cost: acc.cost,
+        conversions: acc.conversions,
+        revenue: acc.revenue,
+        ctr: acc.impressions > 0 ? Number(((acc.clicks / acc.impressions) * 100).toFixed(2)) : 0,
+        cvr: acc.clicks > 0 ? Number(((acc.conversions / acc.clicks) * 100).toFixed(2)) : 0,
         roas: acc.cost > 0 ? Math.round((acc.revenue / acc.cost) * 100) : 0,
         cpa: acc.conversions > 0 ? Math.round(acc.cost / acc.conversions) : 0,
       }))

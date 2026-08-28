@@ -503,13 +503,26 @@
 
           <div class="upload-card upload-dropzone">
             <h3 class="upload-card-title">상품 Raw (쇼핑검색 전용)</h3>
-            <code class="upload-columns">기간, 상품명, 노출수, 클릭수, 총비용, 전환수, 전환매출액</code>
+            <code class="upload-columns">일별, 소재, 노출수, 클릭수, 총비용, 구매완료 전환수, 구매완료 전환매출액(원)</code>
+            <p class="upload-note">이 리포트는 상품명 없이 소재ID로만 내려옵니다. 상품명으로 보려면 아래 "상품 매칭 Raw"를 먼저(또는 같이) 올려주세요.</p>
             <a class="upload-template-link" data-template="sa_product" download="sa_product_raw_template.csv">CSV 템플릿 다운로드</a>
             <form class="upload-form" data-raw-type="sa_product">
               <label class="upload-date-label">
                 날짜(기간) 컬럼이 없는 파일이면 직접 선택
                 <input type="date" class="upload-date-input">
               </label>
+              <input type="file" class="upload-file-input" accept=".csv" required>
+              <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
+            </form>
+            <p class="upload-status" hidden></p>
+          </div>
+
+          <div class="upload-card upload-dropzone">
+            <h3 class="upload-card-title">상품 매칭 Raw (쇼핑검색 전용)</h3>
+            <code class="upload-columns">소재 ID, 기본상품명, 캠페인 이름, 광고그룹 이름, 카테고리, 쇼핑몰 상품ID</code>
+            <p class="upload-note">소재ID ↔ 상품명 매칭표입니다. 날짜 구분 없이 매번 전체를 최신 상태로 덮어씁니다.</p>
+            <a class="upload-template-link" data-template="sa_product_match" download="sa_product_match_raw_template.csv">CSV 템플릿 다운로드</a>
+            <form class="upload-form" data-raw-type="sa_product_match">
               <input type="file" class="upload-file-input" accept=".csv" required>
               <button type="submit" class="btn-primary upload-submit-btn">업로드</button>
             </form>

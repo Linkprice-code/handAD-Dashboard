@@ -107,6 +107,9 @@ interface RawTypeConfig {
   campaignTypeRequired: boolean;
   textFields: string[];
   optionalTextFields?: string[];
+  // true면 날짜/캠페인유형/전환지표가 없는 스냅샷(매칭표) 데이터다 - 재업로드 시
+  // (date 단위가 아니라) advertiser 전체를 delete-then-insert로 덮어쓴다.
+  snapshotOnly?: boolean;
 }
 
 // 네이버 SA_Daily Overview 리포트는 그룹/키워드(검색어) 단위로 내려받으면 캠페인 이름
@@ -126,7 +129,18 @@ const RAW_TYPE_CONFIG: Record<string, RawTypeConfig> = {
     textFields: ["keyword"],
     optionalTextFields: ["campaign", "ad_group"],
   },
-  sa_product: { table: "sa_manual_product_raw", campaignTypeRequired: false, textFields: ["product"] },
+  // 네이버 SA 상품(쇼핑검색) 성과 리포트는 상품명 없이 소재ID("소재")로만 내려온다
+  // (2026-08-28 실제 파일로 확인) - 상품명은 sa_product_match로 따로 매칭한다.
+  sa_product: { table: "sa_manual_product_raw", campaignTypeRequired: false, textFields: ["creative_id"] },
+  // 상품 매칭 Raw: 소재ID <-> 상품명 매칭표(광고 다운로드 - 소재 목록 리포트). 날짜/캠페인유형/
+  // 전환지표가 없는 스냅샷이라 매번 광고주 전체를 최신 상태로 덮어쓴다.
+  sa_product_match: {
+    table: "sa_manual_product_match_raw",
+    campaignTypeRequired: false,
+    textFields: ["creative_id", "product"],
+    optionalTextFields: ["campaign", "ad_group", "category", "mall_product_id"],
+    snapshotOnly: true,
+  },
 };
 
 // SA 키워드(검색어) Raw는 검색어 단위라 4만 행을 넘는 파일도 흔하다 (2026-08-21 실제
@@ -173,30 +187,30 @@ function toNonNegativeNumberOrZero(value: unknown): number | null {
 function validateRow(
   raw: Record<string, unknown>,
   index: number,
-  textFields: string[],
-  optionalTextFields: string[],
-  campaignTypeRequired: boolean,
+  config: RawTypeConfig,
 ): Record<string, unknown> {
   const rowNo = index + 1;
+  const clean: Record<string, unknown> = {};
 
-  if (typeof raw.date !== "string" || !DATE_RE.test(raw.date)) {
-    throw new Error(`${rowNo}번째 행: date 형식이 올바르지 않습니다 (YYYY-MM-DD).`);
-  }
-
-  const clean: Record<string, unknown> = { date: raw.date };
-
-  if (campaignTypeRequired) {
-    const normalized = normalizeCampaignType(raw.campaign_type);
-    if (!normalized) {
-      throw new Error(
-        `${rowNo}번째 행: 캠페인 유형 값("${String(raw.campaign_type ?? "")}")을 인식하지 못했습니다. ` +
-          `파워링크/쇼핑검색/브랜드검색 중 하나로 입력해주세요.`,
-      );
+  if (!config.snapshotOnly) {
+    if (typeof raw.date !== "string" || !DATE_RE.test(raw.date)) {
+      throw new Error(`${rowNo}번째 행: date 형식이 올바르지 않습니다 (YYYY-MM-DD).`);
     }
-    clean.campaign_type = normalized;
+    clean.date = raw.date;
+
+    if (config.campaignTypeRequired) {
+      const normalized = normalizeCampaignType(raw.campaign_type);
+      if (!normalized) {
+        throw new Error(
+          `${rowNo}번째 행: 캠페인 유형 값("${String(raw.campaign_type ?? "")}")을 인식하지 못했습니다. ` +
+            `파워링크/쇼핑검색/브랜드검색 중 하나로 입력해주세요.`,
+        );
+      }
+      clean.campaign_type = normalized;
+    }
   }
 
-  for (const field of textFields) {
+  for (const field of config.textFields) {
     const value = String(raw[field] ?? "").trim();
     if (!value) {
       throw new Error(`${rowNo}번째 행: ${field}는 비어있을 수 없습니다.`);
@@ -207,7 +221,7 @@ function validateRow(
     clean[field] = value;
   }
 
-  for (const field of optionalTextFields) {
+  for (const field of config.optionalTextFields ?? []) {
     const value = String(raw[field] ?? "").trim();
     if (!value) continue;
     if (value.length > MAX_TEXT_LENGTH) {
@@ -216,12 +230,14 @@ function validateRow(
     clean[field] = value;
   }
 
-  for (const field of NUMERIC_FIELDS) {
-    const n = toNonNegativeNumberOrZero(raw[field]);
-    if (n === null) {
-      throw new Error(`${rowNo}번째 행: ${field} 값이 올바르지 않습니다.`);
+  if (!config.snapshotOnly) {
+    for (const field of NUMERIC_FIELDS) {
+      const n = toNonNegativeNumberOrZero(raw[field]);
+      if (n === null) {
+        throw new Error(`${rowNo}번째 행: ${field} 값이 올바르지 않습니다.`);
+      }
+      clean[field] = n;
     }
-    clean[field] = n;
   }
 
   return clean;
@@ -283,15 +299,7 @@ Deno.serve(async (req: Request) => {
 
   let cleanRows: Record<string, unknown>[];
   try {
-    cleanRows = body.rows.map((row, i) =>
-      validateRow(
-        row as Record<string, unknown>,
-        i,
-        config.textFields,
-        config.optionalTextFields ?? [],
-        config.campaignTypeRequired,
-      )
-    );
+    cleanRows = body.rows.map((row, i) => validateRow(row as Record<string, unknown>, i, config));
   } catch (err) {
     return jsonResponse({ success: false, message: (err as Error).message }, 400, headers);
   }
@@ -310,9 +318,19 @@ Deno.serve(async (req: Request) => {
   // 같은 (advertiser, date[, campaign_type]) 조합을 다시 업로드해도 중복 누적되지 않도록,
   // 기존 데이터를 먼저 지우고 새로 넣는다. campaign_type이 행마다 다를 수 있으므로(한 파일에
   // 파워링크/쇼핑검색/브랜드검색이 섞여 있을 수 있음), (date, campaign_type) 조합 단위로 지운다.
-  const uniqueDates = [...new Set(cleanRows.map((r) => r.date as string))];
+  const uniqueDates = config.snapshotOnly ? [] : [...new Set(cleanRows.map((r) => r.date as string))];
 
-  if (config.campaignTypeRequired) {
+  if (config.snapshotOnly) {
+    // 날짜 개념이 없는 스냅샷(매칭표)이라 광고주 전체를 최신 상태로 덮어쓴다.
+    const { error: deleteError } = await supabase
+      .from(config.table)
+      .delete()
+      .eq("advertiser_id", session.advertiser_id);
+    if (deleteError) {
+      console.error("sa-manual-upload delete error:", deleteError.message);
+      return jsonResponse({ success: false, message: "기존 데이터 교체 중 오류가 발생했습니다." }, 500, headers);
+    }
+  } else if (config.campaignTypeRequired) {
     const uniqueKeys = new Set(cleanRows.map((r) => `${r.date}|${r.campaign_type}`));
     for (const key of uniqueKeys) {
       const [date, campaignType] = key.split("|");
